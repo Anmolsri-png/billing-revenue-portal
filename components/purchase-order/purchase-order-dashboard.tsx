@@ -1,10 +1,6 @@
 "use client";
 
-import React, {
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { format } from "date-fns";
 import {
   CalendarIcon,
@@ -30,11 +26,7 @@ import { MonthlyBillingChartCard } from "../dashboard/monthly-billing-chart";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { Label } from "../ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Select,
   SelectContent,
@@ -92,9 +84,7 @@ const financialYearMonths = [
 
 const now = new Date();
 const currentFY =
-  now.getMonth() < 3
-    ? now.getFullYear() - 1
-    : now.getFullYear();
+  now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
 
 const years = Array.from(
   { length: currentFY - 2009 },
@@ -111,9 +101,7 @@ function getDefaultFilters(): Filters {
   };
 }
 
-function formatCurrency(
-  value: number | string | null | undefined,
-) {
+function formatCurrency(value: number | string | null | undefined) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
@@ -121,17 +109,13 @@ function formatCurrency(
   }).format(Number(value || 0));
 }
 
-function formatNumber(
-  value: number | string | null | undefined,
-) {
+function formatNumber(value: number | string | null | undefined) {
   return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
 
-function toNumber(
-  value: number | string | null | undefined,
-) {
+function toNumber(value: number | string | null | undefined) {
   return Number(value ?? 0);
 }
 
@@ -142,28 +126,20 @@ function formatFinancialYearLabel(year: string) {
 
   if (Number.isNaN(numericYear)) return year;
 
-  return `FY ${numericYear}-${String(
-    numericYear + 1,
-  ).slice(-2)}`;
+  return `FY ${numericYear}-${String(numericYear + 1).slice(-2)}`;
 }
 
 function getMonthDisplay(month: string) {
   if (month === "all") return "All Months";
 
-  return (
-    financialYearMonths[Number(month)] ??
-    "Selected Month"
-  );
+  return financialYearMonths[Number(month)] ?? "Selected Month";
 }
 
 function getActiveFilterSummary(filters: Filters) {
   const parts = [formatFinancialYearLabel(filters.year)];
 
   if (filters.month !== "all") {
-    parts.push(
-      financialYearMonths[Number(filters.month)] ??
-      "Selected Month",
-    );
+    parts.push(financialYearMonths[Number(filters.month)] ?? "Selected Month");
   }
 
   if (filters.company !== "all") {
@@ -176,17 +152,11 @@ function getActiveFilterSummary(filters: Filters) {
 function getStatusBadgeTone(status?: string | null) {
   const normalized = status?.toLowerCase() ?? "";
 
-  if (
-    normalized.includes("active") ||
-    normalized.includes("running")
-  ) {
+  if (normalized.includes("active") || normalized.includes("running")) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
-  if (
-    normalized.includes("pending") ||
-    normalized.includes("draft")
-  ) {
+  if (normalized.includes("pending") || normalized.includes("draft")) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
@@ -208,11 +178,7 @@ function TopBar() {
   );
 }
 
-function SectionLabel({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
@@ -252,9 +218,22 @@ function MetricCard({
       />
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-2">
-          <p className="text-xm font-bold tracking-tight text-slate-700">
-            {label}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xm font-bold tracking-tight text-slate-700">
+              {label}
+            </p>
+            <div className="flex items-center gap-1">
+              <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                {monthLabel}
+              </span>
+
+              <span className="text-xs font-bold text-slate-500">/</span>
+
+              <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                {yearLabel}
+              </span>
+            </div>
+          </div>
           <div className="flex items-baseline gap-1.5">
             <p className="font-mono text-lg font-semibold tracking-tight text-slate-950 tabular-nums sm:text-xl">
               {value}
@@ -265,40 +244,30 @@ function MetricCard({
               </span>
             ) : null}
           </div>
-          <p className="text-xs leading-5 text-slate-400">
-            {description}
-          </p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-              Month: {monthLabel}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-              Year: {yearLabel}
-            </span>
-          </div>
+          <p className="text-xs leading-5 text-slate-400">{description}</p>
         </div>
-        <div
-          className={cn(
-            "shrink-0 rounded-2xl border p-3 shadow-sm",
-            tone.replace("bg-", "border-").replace("500", "200"),
-            tone.replace("bg-", "bg-").replace("500", "50"),
-          )}
-        >
-          <Icon
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div
             className={cn(
-              "h-4 w-4",
-              tone.replace("bg-", "text-").replace("500", "600"),
+              "rounded-2xl border p-3 shadow-sm",
+              tone.replace("bg-", "border-").replace("500", "200"),
+              tone.replace("bg-", "bg-").replace("500", "50"),
             )}
-          />
+          >
+            <Icon
+              className={cn(
+                "h-4 w-4",
+                tone.replace("bg-", "text-").replace("500", "600"),
+              )}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-const PurchaseOrderDashboard = ({
-  companies,
-}: PurchaseOrderDashboardProps) => {
+const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
   const hydrated = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -307,27 +276,15 @@ const PurchaseOrderDashboard = ({
 
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(
-    null,
-  );
-  const [filters, setFilters] =
-    useState<Filters>(getDefaultFilters);
-  const [revenueDetails, setRevenueDetails] = useState<
-    RevenueDetail[]
-  >([]);
-  const [currentRevenueTotal, setCurrentRevenueTotal] =
-    useState(0);
-  const [dueForBillingTotal, setDueForBillingTotal] =
-    useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [filters, setFilters] = useState<Filters>(getDefaultFilters);
+  const [revenueDetails, setRevenueDetails] = useState<RevenueDetail[]>([]);
+  const [currentRevenueTotal, setCurrentRevenueTotal] = useState(0);
+  const [dueForBillingTotal, setDueForBillingTotal] = useState(0);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
-  const updateFilter = <
-    K extends keyof Filters,
-  >(
-    key: K,
-    value: Filters[K],
-  ) => {
+  const updateFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -346,24 +303,13 @@ const PurchaseOrderDashboard = ({
 
       try {
         const selectedYear =
-          filters.year === "all"
-            ? undefined
-            : Number(filters.year);
+          filters.year === "all" ? undefined : Number(filters.year);
         const billingYearForCurrentTotal =
-          filters.year === "all"
-            ? currentFY
-            : Number(filters.year);
-        const [
-          data,
-          monthlyBillingData,
-          dueForBillingAmount,
-        ] =
+          filters.year === "all" ? currentFY : Number(filters.year);
+        const [data, monthlyBillingData, dueForBillingAmount] =
           await Promise.all([
             getBillingStatusDetails(selectedYear, filters),
-            getMonthlyBillingData(
-              billingYearForCurrentTotal,
-              filters,
-            ),
+            getMonthlyBillingData(billingYearForCurrentTotal, filters),
             getDueForBillingAmount(selectedYear, filters),
           ]);
 
@@ -400,10 +346,7 @@ const PurchaseOrderDashboard = ({
     setPageIndex((prev) =>
       Math.min(
         prev,
-        Math.max(
-          0,
-          Math.ceil(revenueDetails.length / pageSize) - 1,
-        ),
+        Math.max(0, Math.ceil(revenueDetails.length / pageSize) - 1),
       ),
     );
   }, [pageSize, revenueDetails.length]);
@@ -413,12 +356,8 @@ const PurchaseOrderDashboard = ({
   const filteredStats = revenueDetails.reduce(
     (acc, item) => {
       acc.totalBilledAmount += toNumber(item.amount);
-      acc.totalCollectedAmount += toNumber(
-        item.collectedAmount,
-      );
-      acc.totalOverdueAmount += toNumber(
-        item.overdueAmount,
-      );
+      acc.totalCollectedAmount += toNumber(item.collectedAmount);
+      acc.totalOverdueAmount += toNumber(item.overdueAmount);
 
       return acc;
     },
@@ -432,10 +371,10 @@ const PurchaseOrderDashboard = ({
   const collectionEfficiency =
     filteredStats.totalBilledAmount > 0
       ? Math.round(
-        (filteredStats.totalCollectedAmount /
-          filteredStats.totalBilledAmount) *
-        100,
-      )
+          (filteredStats.totalCollectedAmount /
+            filteredStats.totalBilledAmount) *
+            100,
+        )
       : 0;
 
   const activeFilterCount = [
@@ -450,23 +389,21 @@ const PurchaseOrderDashboard = ({
 
   const metrics = [
     {
-      label: "Total Revenue",
-      description:
-        "Billed revenue recorded till the current financial month",
-      value: formatCurrency(currentRevenueTotal),
-      icon: IndianRupee,
-      tone: "bg-sky-500",
-    },
-    {
       label: "Total Revenue Projected",
-      description:
-        "Combined billed revenue across the current selection",
+      description: "Combined billed revenue across the current selection",
       value: formatCurrency(filteredStats.totalBilledAmount),
       icon: IndianRupee,
       tone: "bg-violet-500",
     },
     {
-      label: "Due for Billing",
+      label: "Total Revenue Till Now",
+      description: "Billed revenue recorded till the current financial month",
+      value: formatCurrency(currentRevenueTotal),
+      icon: IndianRupee,
+      tone: "bg-sky-500",
+    },
+    {
+      label: "Due for Billing Till Now",
       description:
         "Billing amount pending invoice generation after the billing date",
       value: formatCurrency(dueForBillingTotal),
@@ -474,20 +411,16 @@ const PurchaseOrderDashboard = ({
       tone: "bg-amber-500",
     },
     {
-      label: "Collected Amount",
+      label: "Collected Amount Till Now",
       description: "Payments already received for billed revenue",
-      value: formatCurrency(
-        filteredStats.totalCollectedAmount,
-      ),
+      value: formatCurrency(filteredStats.totalCollectedAmount),
       icon: TrendingUp,
       tone: "bg-emerald-500",
     },
     {
-      label: "Due For Collection",
+      label: "Due For Collection Till Now",
       description: "Outstanding amount still pending collection",
-      value: formatCurrency(
-        filteredStats.totalOverdueAmount,
-      ),
+      value: formatCurrency(filteredStats.totalOverdueAmount),
       icon: TrendingDown,
       tone: "bg-rose-500",
     },
@@ -508,26 +441,13 @@ const PurchaseOrderDashboard = ({
     },
   ];
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(revenueDetails.length / pageSize),
-  );
-  const safePageIndex = Math.min(
-    pageIndex,
-    totalPages - 1,
-  );
+  const totalPages = Math.max(1, Math.ceil(revenueDetails.length / pageSize));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
   const startRow = safePageIndex * pageSize;
   const endRow = startRow + pageSize;
-  const paginatedRevenueDetails = revenueDetails.slice(
-    startRow,
-    endRow,
-  );
-  const visibleStart =
-    revenueDetails.length === 0 ? 0 : startRow + 1;
-  const visibleEnd = Math.min(
-    endRow,
-    revenueDetails.length,
-  );
+  const paginatedRevenueDetails = revenueDetails.slice(startRow, endRow);
+  const visibleStart = revenueDetails.length === 0 ? 0 : startRow + 1;
+  const visibleEnd = Math.min(endRow, revenueDetails.length);
 
   return (
     <>
@@ -551,11 +471,9 @@ const PurchaseOrderDashboard = ({
                   Revenue Dashboard
                 </h1>
                 <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-[15px]">
-                  Track billed revenue, collections,
-                  overdue amounts, and billing
-                  performance with the same reporting
-                  experience used across the P&amp;L
-                  dashboard.
+                  Track billed revenue, collections, overdue amounts, and
+                  billing performance with the same reporting experience used
+                  across the P&amp;L dashboard.
                 </p>
               </div>
 
@@ -567,9 +485,9 @@ const PurchaseOrderDashboard = ({
                 <p className="text-xs font-medium tracking-wide text-slate-400">
                   {lastUpdated
                     ? `Last refreshed ${format(
-                      lastUpdated,
-                      "dd MMM yyyy, hh:mm a",
-                    )}`
+                        lastUpdated,
+                        "dd MMM yyyy, hh:mm a",
+                      )}`
                     : "Waiting for first refresh"}
                 </p>
               </div>
@@ -579,9 +497,7 @@ const PurchaseOrderDashboard = ({
 
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <button
-            onClick={() =>
-              setFiltersOpen((value) => !value)
-            }
+            onClick={() => setFiltersOpen((value) => !value)}
             className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-slate-50 sm:px-7"
           >
             <div className="flex items-center gap-3">
@@ -589,12 +505,9 @@ const PurchaseOrderDashboard = ({
                 <SlidersHorizontal className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  Filters
-                </p>
+                <p className="text-sm font-semibold text-slate-900">Filters</p>
                 <p className="text-xs text-slate-500">
-                  Refine by company, date, month, and
-                  year
+                  Refine by company, date, month, and year
                 </p>
               </div>
 
@@ -622,22 +535,15 @@ const PurchaseOrderDashboard = ({
                   </Label>
                   <Select
                     value={filters.company}
-                    onValueChange={(value) =>
-                      updateFilter("company", value)
-                    }
+                    onValueChange={(value) => updateFilter("company", value)}
                   >
                     <SelectTrigger className="h-10 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50 text-sm">
                       <SelectValue placeholder="All Companies" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
-                      <SelectItem value="all">
-                        All Companies
-                      </SelectItem>
+                      <SelectItem value="all">All Companies</SelectItem>
                       {companies.map((company) => (
-                        <SelectItem
-                          key={company.id}
-                          value={String(company.id)}
-                        >
+                        <SelectItem key={company.id} value={String(company.id)}>
                           {company.name}
                         </SelectItem>
                       ))}
@@ -657,10 +563,7 @@ const PurchaseOrderDashboard = ({
                       >
                         <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
                         {filters.startDate
-                          ? format(
-                            filters.startDate,
-                            "PPP",
-                          )
+                          ? format(filters.startDate, "PPP")
                           : "Select date"}
                       </Button>
                     </PopoverTrigger>
@@ -674,9 +577,7 @@ const PurchaseOrderDashboard = ({
                       <Calendar
                         mode="single"
                         selected={filters.startDate}
-                        onSelect={(date) =>
-                          updateFilter("startDate", date)
-                        }
+                        onSelect={(date) => updateFilter("startDate", date)}
                       />
                     </PopoverContent>
                   </Popover>
@@ -694,10 +595,7 @@ const PurchaseOrderDashboard = ({
                       >
                         <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
                         {filters.endDate
-                          ? format(
-                            filters.endDate,
-                            "PPP",
-                          )
+                          ? format(filters.endDate, "PPP")
                           : "Select date"}
                       </Button>
                     </PopoverTrigger>
@@ -711,9 +609,7 @@ const PurchaseOrderDashboard = ({
                       <Calendar
                         mode="single"
                         selected={filters.endDate}
-                        onSelect={(date) =>
-                          updateFilter("endDate", date)
-                        }
+                        onSelect={(date) => updateFilter("endDate", date)}
                       />
                     </PopoverContent>
                   </Popover>
@@ -725,27 +621,18 @@ const PurchaseOrderDashboard = ({
                   </Label>
                   <Select
                     value={filters.month}
-                    onValueChange={(value) =>
-                      updateFilter("month", value)
-                    }
+                    onValueChange={(value) => updateFilter("month", value)}
                   >
                     <SelectTrigger className="h-10 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50 text-sm">
                       <SelectValue placeholder="All Months" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
-                      <SelectItem value="all">
-                        All Months
-                      </SelectItem>
-                      {financialYearMonths.map(
-                        (month, index) => (
-                          <SelectItem
-                            key={month}
-                            value={index.toString()}
-                          >
-                            {month}
-                          </SelectItem>
-                        ),
-                      )}
+                      <SelectItem value="all">All Months</SelectItem>
+                      {financialYearMonths.map((month, index) => (
+                        <SelectItem key={month} value={index.toString()}>
+                          {month}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -756,25 +643,16 @@ const PurchaseOrderDashboard = ({
                   </Label>
                   <Select
                     value={filters.year}
-                    onValueChange={(value) =>
-                      updateFilter("year", value)
-                    }
+                    onValueChange={(value) => updateFilter("year", value)}
                   >
                     <SelectTrigger className="h-10 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50 text-sm">
                       <SelectValue placeholder="Select Year" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
-                      <SelectItem value="all">
-                        All Years
-                      </SelectItem>
+                      <SelectItem value="all">All Years</SelectItem>
                       {years.map((year) => (
-                        <SelectItem
-                          key={year}
-                          value={year.toString()}
-                        >
-                          {formatFinancialYearLabel(
-                            year.toString(),
-                          )}
+                        <SelectItem key={year} value={year.toString()}>
+                          {formatFinancialYearLabel(year.toString())}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -794,13 +672,15 @@ const PurchaseOrderDashboard = ({
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3">
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Viewing {revenueDetails.length} records
                 </div>
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Period: {getMonthDisplay(filters.month)}
                 </div>
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Year: {formatFinancialYearLabel(filters.year)}
                 </div>
               </div>
@@ -810,7 +690,7 @@ const PurchaseOrderDashboard = ({
 
         <section className="space-y-3">
           <SectionLabel>Key metrics</SectionLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {metrics.map((metric) => (
               <MetricCard
                 key={metric.label}
@@ -836,8 +716,7 @@ const PurchaseOrderDashboard = ({
                   Revenue Breakdown
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                  Purchase-order level billing,
-                  collection, and pending amount
+                  Purchase-order level billing, collection, and pending amount
                   overview for the active filters.
                 </p>
               </div>
@@ -845,15 +724,11 @@ const PurchaseOrderDashboard = ({
               <div className="flex flex-wrap gap-3 text-xs font-medium">
                 <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-indigo-700">
                   <span className="h-2 w-2 rounded-full bg-indigo-400" />
-                  {formatNumber(revenueDetails.length)}{" "}
-                  records
+                  {formatNumber(revenueDetails.length)} records
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-rose-700">
                   <span className="h-2 w-2 rounded-full bg-rose-400" />
-                  {formatCurrency(
-                    filteredStats.totalOverdueAmount,
-                  )}{" "}
-                  overdue
+                  {formatCurrency(filteredStats.totalOverdueAmount)} overdue
                 </span>
               </div>
             </div>
@@ -898,25 +773,18 @@ const PurchaseOrderDashboard = ({
                       </td>
                     </tr>
                   ) : (
-                    paginatedRevenueDetails.map(
-                      (item, index) => {
-                        const rowIndex =
-                          startRow + index;
+                    paginatedRevenueDetails.map((item, index) => {
+                      const rowIndex = startRow + index;
                       const pendingAmount = Math.max(
                         toNumber(item.overdueAmount) ||
-                        toNumber(item.amount) -
-                        toNumber(
-                          item.collectedAmount,
-                        ),
+                          toNumber(item.amount) -
+                            toNumber(item.collectedAmount),
                         0,
                       );
 
                       return (
                         <tr
-                          key={
-                            item.id ??
-                            `${item.poNumber}-${rowIndex}`
-                          }
+                          key={item.id ?? `${item.poNumber}-${rowIndex}`}
                           className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                         >
                           <td className="px-5 py-4 font-mono text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
@@ -935,9 +803,7 @@ const PurchaseOrderDashboard = ({
                             {formatCurrency(item.amount)}
                           </td>
                           <td className="px-5 py-4 font-mono text-sm text-slate-700 tabular-nums">
-                            {formatCurrency(
-                              item.collectedAmount,
-                            )}
+                            {formatCurrency(item.collectedAmount)}
                           </td>
                           <td className="px-5 py-4 font-mono text-sm font-semibold text-slate-950 tabular-nums">
                             {formatCurrency(pendingAmount)}
@@ -955,9 +821,7 @@ const PurchaseOrderDashboard = ({
                             <span
                               className={cn(
                                 "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                                getStatusBadgeTone(
-                                  item.status,
-                                ),
+                                getStatusBadgeTone(item.status),
                               )}
                             >
                               {item.status || "-"}
@@ -965,8 +829,7 @@ const PurchaseOrderDashboard = ({
                           </td>
                         </tr>
                       );
-                      },
-                    )
+                    })
                   )}
                 </tbody>
               </table>
@@ -974,8 +837,8 @@ const PurchaseOrderDashboard = ({
 
             <div className="flex flex-col gap-4 border-t border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
               <div className="text-sm text-slate-500">
-                Showing {visibleStart}-{visibleEnd} of{" "}
-                {revenueDetails.length} records
+                Showing {visibleStart}-{visibleEnd} of {revenueDetails.length}{" "}
+                records
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -995,10 +858,7 @@ const PurchaseOrderDashboard = ({
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
                       {[10, 20, 30, 50].map((size) => (
-                        <SelectItem
-                          key={size}
-                          value={size.toString()}
-                        >
+                        <SelectItem key={size} value={size.toString()}>
                           {size}
                         </SelectItem>
                       ))}
@@ -1017,16 +877,12 @@ const PurchaseOrderDashboard = ({
                       size="icon"
                       className="h-9 w-9 rounded-2xl border-slate-200"
                       onClick={() =>
-                        setPageIndex((prev) =>
-                          Math.max(prev - 1, 0),
-                        )
+                        setPageIndex((prev) => Math.max(prev - 1, 0))
                       }
                       disabled={safePageIndex === 0}
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      <span className="sr-only">
-                        Previous page
-                      </span>
+                      <span className="sr-only">Previous page</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -1034,20 +890,13 @@ const PurchaseOrderDashboard = ({
                       className="h-9 w-9 rounded-2xl border-slate-200"
                       onClick={() =>
                         setPageIndex((prev) =>
-                          Math.min(
-                            prev + 1,
-                            totalPages - 1,
-                          ),
+                          Math.min(prev + 1, totalPages - 1),
                         )
                       }
-                      disabled={
-                        safePageIndex >= totalPages - 1
-                      }
+                      disabled={safePageIndex >= totalPages - 1}
                     >
                       <ChevronRight className="h-4 w-4" />
-                      <span className="sr-only">
-                        Next page
-                      </span>
+                      <span className="sr-only">Next page</span>
                     </Button>
                   </div>
                 </div>

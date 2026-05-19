@@ -319,10 +319,23 @@ function MetricCard({
         )}
       />
       <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-2">
-          <p className="text-xm font-bold tracking-tight text-slate-700">
-            {label}
-          </p>
+        <div className="min-w-0 space-y-2 item-start">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xm font-bold tracking-tight text-slate-700">
+              {label}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+              {monthLabel}
+            </span>
+
+            <span className="text-xs font-bold text-slate-500">/</span>
+
+            <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+              {yearLabel}
+            </span>
+          </div>
           <div className="flex items-baseline gap-1.5">
             <p className="font-mono text-lg font-semibold tracking-tight text-slate-950 tabular-nums sm:text-xl">
               {value}
@@ -334,14 +347,6 @@ function MetricCard({
             ) : null}
           </div>
           <p className="text-xs leading-5 text-slate-400">{description}</p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-              Month: {monthLabel}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-              Year: {yearLabel}
-            </span>
-          </div>
         </div>
         <div
           className={cn(
@@ -550,56 +555,56 @@ export function PLDashboardComponent({
 
   const metrics = [
     {
-      label: "Purchase Order Value",
+      label: "Total Purchased Order Value",
       description: "Combined PO value across the current selection",
       value: formatCurrency(totalValues.totalPOValue),
       icon: IndianRupee,
       tone: "bg-violet-500",
     },
     {
-      label: "Billable Amount",
+      label: "Total Billable Amount",
       description: "Total amount planned for billing",
       value: formatCurrency(totalValues.totalBillableAmount),
       icon: Layers3,
       tone: "bg-sky-500",
     },
     {
-      label: "Billed Revenue",
+      label: "Total Billed Revenue",
       description: "Revenue already billed for the selected view",
       value: formatCurrency(totalValues.totalBilledValue),
       icon: TrendingUp,
       tone: "bg-emerald-500",
     },
     {
-      label: "Operating Cost",
+      label: "Total Operating Cost",
       description: "All tracked delivery and support costs",
       value: formatCurrency(totalValues.totalCostValue),
       icon: TrendingDown,
       tone: "bg-rose-500",
     },
     {
-      label: "Resource Count",
+      label: "Total Resource Count",
       description: "Resources contributing across active projects",
       value: formatNumber(totalValues.totalResourceCount),
       icon: Users,
       tone: "bg-amber-500",
     },
     {
-      label: "FMS Cost",
+      label: "Total FMS Cost",
       description: "Field maintenance service cost total",
       value: formatCurrency(totalValues.totalFMSValue),
       icon: Wrench,
       tone: "bg-blue-500",
     },
     {
-      label: "Spare Cost",
+      label: "Total Spare Cost",
       description: "Spare parts cost across all records",
       value: formatCurrency(totalValues.totalSpareValue),
       icon: BarChart3,
       tone: "bg-indigo-500",
     },
     {
-      label: "Miscellaneous Cost",
+      label: "Total Miscellaneous Cost",
       description: "Additional costs outside main categories",
       value: formatCurrency(totalValues.totalMiscCostValue),
       icon: BarChart3,
@@ -867,13 +872,15 @@ export function PLDashboardComponent({
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3">
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Viewing {filteredValues.length} projects
                 </div>
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Period: {getMonthDisplay(filters.month)}
                 </div>
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+
+                <div className="rounded-full border border-blue-900 bg-blue-900 px-4 py-2 text-sm font-bold text-white">
                   Year: {formatFinancialYearLabel(filters.year)}
                 </div>
               </div>
@@ -883,7 +890,7 @@ export function PLDashboardComponent({
 
         <section className="space-y-3">
           <SectionLabel>Key metrics</SectionLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {metrics.map((metric) => (
               <MetricCard
                 key={metric.label}
@@ -998,8 +1005,8 @@ export function PLDashboardComponent({
                       const profitNum =
                         totalBilledValue > 0
                           ? ((totalBilledValue - totalCostValue) /
-                            totalBilledValue) *
-                          100
+                              totalBilledValue) *
+                            100
                           : 0;
                       const projectedValue = Number(
                         project.projectedProfit || 0,
@@ -1154,16 +1161,20 @@ export function PLDashboardComponent({
               <table className="min-w-[720px] w-full">
                 <thead className="bg-slate-50">
                   <tr className="border-b border-slate-100">
-                    {["Month", "Year", "Company", "Project", "Billing Amount"].map(
-                      (heading) => (
-                        <th
-                          key={heading}
-                          className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400"
-                        >
-                          {heading}
-                        </th>
-                      ),
-                    )}
+                    {[
+                      "Month",
+                      "Year",
+                      "Company",
+                      "Project",
+                      "Billing Amount",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400"
+                      >
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -1174,7 +1185,9 @@ export function PLDashboardComponent({
                         className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                       >
                         <td className="px-5 py-4 text-sm text-slate-700">
-                          {moment().month(item.month - 1).format("MMMM")}
+                          {moment()
+                            .month(item.month - 1)
+                            .format("MMMM")}
                         </td>
                         <td className="px-5 py-4 font-mono text-sm text-slate-500 tabular-nums">
                           {item.year}
@@ -1264,7 +1277,9 @@ export function PLDashboardComponent({
                           className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                         >
                           <td className="px-5 py-4 text-sm text-slate-700">
-                            {moment().month(item.month - 1).format("MMMM")}
+                            {moment()
+                              .month(item.month - 1)
+                              .format("MMMM")}
                           </td>
                           <td className="px-5 py-4 font-mono text-sm text-slate-500 tabular-nums">
                             {item.year}
