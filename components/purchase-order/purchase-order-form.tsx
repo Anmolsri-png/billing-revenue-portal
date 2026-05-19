@@ -45,7 +45,6 @@ import {
   themedSectionClassName,
   themedSelectTriggerClassName,
   themedSubmitButtonClassName,
-  themedTabTriggerClassName,
   themedTabsListClassName,
   themedTextareaClassName,
 } from "@/components/ui/form-theme";
@@ -63,6 +62,7 @@ import {
   ContractType,
   Customer,
   ServiceType,
+  Vendor,
 } from "@/types";
 import z from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
@@ -80,6 +80,7 @@ type PurchaseOrderFormData = Partial<PurchaseOrderFormValues> & {
     Partial<PurchaseOrderFormValues["billingCycles"][number]>
   >;
   companyId?: string | null;
+  vendorId?: string | null;
   id?: string;
   status?: POStatus;
 };
@@ -103,6 +104,7 @@ const defaultPurchaseOrderValues: PurchaseOrderFormValues = {
   paymentTerms: "",
   billingPlanId: "",
   customerId: "",
+  vendorId: "",
   poOwner: "",
   status: POStatus.LIVE,
   startFrom: undefined,
@@ -159,6 +161,7 @@ const POForm = ({
   serviceType,
   contractType,
   customers,
+  vendors,
   companies,
   data,
   update = false,
@@ -168,6 +171,7 @@ const POForm = ({
   serviceType: ServiceType[];
   contractType: ContractType[];
   customers: Customer[];
+  vendors: Vendor[];
   companies: Company[];
   data?: PurchaseOrderFormData;
   update: boolean;
@@ -451,6 +455,7 @@ const POForm = ({
       contractId: String(data.contractId ?? ""),
       billingPlanId: String(data.billingPlanId ?? ""),
       customerId: String(data.customerId ?? ""),
+      vendorId: String(data.vendorId ?? ""),
 
       paymentTerms: data.paymentTerms ?? "",
       poOwner: data.poOwner ?? "",
@@ -921,6 +926,46 @@ const POForm = ({
                                 {customer.firstName} {customer.lastName}
                               </SelectItem>
                             ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Vendor */}
+              <FormField
+                control={form.control}
+                name="vendorId"
+                render={({ field }) => (
+                  <FormItem className={themedFieldClassName}>
+                    <FormLabel className={themedLabelClassName}>Vendor</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? ""}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger className={themedSelectTriggerClassName}>
+                          <SelectValue placeholder="Vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {vendors.map((vendor) => {
+                              const fullName = [vendor.firstName, vendor.lastName]
+                                .filter(Boolean)
+                                .join(" ");
+
+                              return (
+                                <SelectItem
+                                  key={vendor.id}
+                                  value={String(vendor.id)}
+                                >
+                                  {vendor.companyName || fullName || vendor.vendorCode}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectGroup>
                         </SelectContent>
                       </Select>

@@ -18,6 +18,13 @@ type RevenueRow = {
   id: string;
   company?: { name?: string | null } | null;
   customer?: { companyName?: string | null } | null;
+  vendor?:
+    | {
+        companyName?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+      }
+    | null;
   customerPONumber?: string | null;
   scope?: string | null;
   poOwner?: string | null;
@@ -80,6 +87,34 @@ export const getUsersColumns = ({
           </p>
         </div>
       ),
+    },
+    {
+      accessorKey: "vendorId",
+      header: () => (
+        <span className="text-xs font-semibold uppercase tracking-wider text-white">
+          Vendor
+        </span>
+      ),
+      cell: ({ row }) => {
+        const vendor = row.original.vendor;
+        const vendorName =
+          vendor?.companyName ||
+          [vendor?.firstName, vendor?.lastName].filter(Boolean).join(" ") ||
+          "-";
+        const contactName =
+          [vendor?.firstName, vendor?.lastName].filter(Boolean).join(" ") || "-";
+
+        return (
+          <div className="space-y-1">
+            <p className="font-semibold text-slate-900">
+              {vendorName}
+            </p>
+            <p className="text-xs text-slate-500">
+              Contact: {contactName}
+            </p>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "customerPONumber",

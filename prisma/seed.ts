@@ -14,6 +14,7 @@ async function main() {
         { name: "Billing Plan", route: "/admin/billing-plan" },
         { name: "Contract Duration", route: "/admin/contract-duration" },
         { name: "Customer", route: "/admin/customer" },
+        { name: "Vendor", route: "/admin/vendor" },
         { name: "Company", route: "/admin/company" },
         { name: "Users", route: "/admin/users" },
         { name: "Roles", route: "/admin/roles" },
@@ -53,18 +54,18 @@ async function main() {
         }
     })
 
-    for (const module of createdModules) {
+    for (const createdModule of createdModules) {
         await prisma.roleModule.upsert({
             where: {
                 roleId_moduleId: {
                     roleId: adminRole.id,
-                    moduleId: module.id,
+                    moduleId: createdModule.id,
                 },
             },
             update: {},
             create: {
                 roleId: adminRole.id,
-                moduleId: module.id,
+                moduleId: createdModule.id,
                 canView: true,
                 canCreate: true,
                 canEdit: true,

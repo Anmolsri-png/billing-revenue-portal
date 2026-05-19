@@ -19,7 +19,11 @@ import {
   X,
 } from "lucide-react";
 
-import { getBillingStatusDetails } from "@/lib/actions/dashboard";
+import {
+  getBillingStatusDetails,
+  getDueForBillingAmount,
+  getMonthlyBillingData,
+} from "@/lib/actions/dashboard";
 import { cn } from "@/lib/utils";
 
 import { MonthlyBillingChartCard } from "../dashboard/monthly-billing-chart";
@@ -226,6 +230,8 @@ function MetricCard({
   icon: Icon,
   tone,
   suffix,
+  monthLabel,
+  yearLabel,
 }: {
   description: string;
   label: string;
@@ -233,6 +239,8 @@ function MetricCard({
   icon: React.ElementType;
   tone: string;
   suffix?: string;
+  monthLabel: string;
+  yearLabel: string;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
@@ -260,6 +268,14 @@ function MetricCard({
           <p className="text-xs leading-5 text-slate-400">
             {description}
           </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              Month: {monthLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              Year: {yearLabel}
+            </span>
+          </div>
         </div>
         <div
           className={cn(
@@ -299,6 +315,10 @@ const PurchaseOrderDashboard = ({
   const [revenueDetails, setRevenueDetails] = useState<
     RevenueDetail[]
   >([]);
+  const [currentRevenueTotal, setCurrentRevenueTotal] =
+    useState(0);
+  const [dueForBillingTotal, setDueForBillingTotal] =
+    useState(0);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
@@ -329,15 +349,34 @@ const PurchaseOrderDashboard = ({
           filters.year === "all"
             ? undefined
             : Number(filters.year);
-
-        const data = await getBillingStatusDetails(
-          selectedYear,
-          filters,
-        );
+        const billingYearForCurrentTotal =
+          filters.year === "all"
+            ? currentFY
+            : Number(filters.year);
+        const [
+          data,
+          monthlyBillingData,
+          dueForBillingAmount,
+        ] =
+          await Promise.all([
+            getBillingStatusDetails(selectedYear, filters),
+            getMonthlyBillingData(
+              billingYearForCurrentTotal,
+              filters,
+            ),
+            getDueForBillingAmount(selectedYear, filters),
+          ]);
 
         if (!active) return;
 
         setRevenueDetails(data ?? []);
+        setCurrentRevenueTotal(
+          (monthlyBillingData ?? []).reduce(
+            (sum, item) => sum + Number(item.billing || 0),
+            0,
+          ),
+        );
+        setDueForBillingTotal(dueForBillingAmount);
         setLastUpdated(new Date());
       } finally {
         if (active) {
@@ -406,15 +445,33 @@ const PurchaseOrderDashboard = ({
     Boolean(filters.startDate),
     Boolean(filters.endDate),
   ].filter(Boolean).length;
+  const metricMonthLabel = getMonthDisplay(filters.month);
+  const metricYearLabel = formatFinancialYearLabel(filters.year);
 
   const metrics = [
     {
       label: "Total Revenue",
       description:
+        "Billed revenue recorded till the current financial month",
+      value: formatCurrency(currentRevenueTotal),
+      icon: IndianRupee,
+      tone: "bg-sky-500",
+    },
+    {
+      label: "Total Revenue Projected",
+      description:
         "Combined billed revenue across the current selection",
       value: formatCurrency(filteredStats.totalBilledAmount),
       icon: IndianRupee,
       tone: "bg-violet-500",
+    },
+    {
+      label: "Due for Billing",
+      description:
+        "Billing amount pending invoice generation after the billing date",
+      value: formatCurrency(dueForBillingTotal),
+      icon: CalendarIcon,
+      tone: "bg-amber-500",
     },
     {
       label: "Collected Amount",
@@ -426,7 +483,7 @@ const PurchaseOrderDashboard = ({
       tone: "bg-emerald-500",
     },
     {
-      label: "Overdue Amount",
+      label: "Due For Collection",
       description: "Outstanding amount still pending collection",
       value: formatCurrency(
         filteredStats.totalOverdueAmount,
@@ -440,7 +497,7 @@ const PurchaseOrderDashboard = ({
       value: formatNumber(collectionEfficiency),
       suffix: "%",
       icon: Layers3,
-      tone: "bg-sky-500",
+      tone: "bg-cyan-500",
     },
     {
       label: "Billing Records",
@@ -753,7 +810,7 @@ const PurchaseOrderDashboard = ({
 
         <section className="space-y-3">
           <SectionLabel>Key metrics</SectionLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => (
               <MetricCard
                 key={metric.label}
@@ -763,6 +820,8 @@ const PurchaseOrderDashboard = ({
                 icon={metric.icon}
                 tone={metric.tone}
                 suffix={metric.suffix}
+                monthLabel={metricMonthLabel}
+                yearLabel={metricYearLabel}
               />
             ))}
           </div>

@@ -112,7 +112,7 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
     return <p className="p-6 font-semibold text-red-600">Purchase Order not found.</p>;
   }
 
-  const route = "/admin/module";
+  const route = "/admin/revenue";
   const canView = await canAccess(route, "view");
   if (!canView) {
     redirect("/404");
@@ -231,6 +231,14 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
             value={`${po.contractDuration?.totalNumberOfMonths || "-"} months`}
           />
           <Detail label="Contract" value={po.contract?.name} />
+          <Detail
+            label="Vendor"
+            value={
+              po.vendor?.companyName ||
+              [po.vendor?.firstName, po.vendor?.lastName].filter(Boolean).join(" ") ||
+              "-"
+            }
+          />
         </Panel>
       </div>
 

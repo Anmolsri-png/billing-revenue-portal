@@ -57,6 +57,7 @@ export const purchaseOrderDefaultValues = {
   contractDurationId: "",
   contractId: "",
   companyId: "",
+  vendorId: "",
 
   startFrom: null as Date | null,
   endDate: null as Date | null,
@@ -122,6 +123,28 @@ export const contractTypeDefaultValues = {
 /* ---------------- CUSTOMER ---------------- */
 export const customerDefaultValues = {
   customerCode: "",
+  firstName: "",
+  lastName: "",
+  companyName: "",
+  email: "",
+  phone: "",
+  alternatePhone: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  country: "",
+  postalCode: "",
+  gstNumber: "",
+  panNumber: "",
+  website: "",
+  remark: "",
+  status: Status.ACTIVE,
+};
+
+/* ---------------- VENDOR ---------------- */
+export const vendorDefaultValues = {
+  vendorCode: "",
   firstName: "",
   lastName: "",
   companyName: "",

@@ -42,6 +42,7 @@ export default async function AdminLayout({
       name: userRoles.firstName || undefined,
       email: userRoles.email || undefined,
       allowedRoutes,
+      role: userRoles.role?.name || undefined,
     }
     : undefined;
 

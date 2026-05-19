@@ -4,9 +4,10 @@ import { getBillingPlans } from "@/lib/actions/billing-plan";
 import { getContractTypes } from "@/lib/actions/contract-type";
 import { getServiceTypes } from "@/lib/actions/service-type";
 import { getCustomers } from "@/lib/actions/customer";
-import { BillingPlan, Company, Customer } from "@/types";
+import { BillingPlan, Company, Customer, Vendor } from "@/types";
 import { getContractDurations } from "@/lib/actions/contract-duration";
 import { getCompanys } from "@/lib/actions/company";
+import { getVendors } from "@/lib/actions/vendor";
 import { canAccess } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { EditPageShell } from "@/components/ui/edit-page-shell";
@@ -21,6 +22,7 @@ const EditPOPage = async ({ params }: EditPOPageProps) => {
   const contractType = await getContractTypes()
   const serviceType = await getServiceTypes()
   const customers = await getCustomers()
+  const vendors = await getVendors()
   const contractDurations = await getContractDurations()
   const companies = await getCompanys()
 
@@ -28,9 +30,9 @@ const EditPOPage = async ({ params }: EditPOPageProps) => {
 
   const po = await getPurchaseOrderById(id);
 
-  const route = "/admin/module";
-  const canView = await canAccess(route, "edit")
-  if (!canView) {
+  const route = "/admin/revenue";
+  const canEdit = await canAccess(route, "edit")
+  if (!canEdit) {
     redirect("/404");
   }
 
@@ -49,6 +51,7 @@ const EditPOPage = async ({ params }: EditPOPageProps) => {
         contractType={contractType}
         serviceType={serviceType}
         customers={customers as Customer[]}
+        vendors={vendors as Vendor[]}
         contractDurations={contractDurations}
       />
     </EditPageShell>

@@ -154,16 +154,16 @@ function getInvoiceDate(
   return cycle.invoiceDate ?? cycle.billingSubmittedDate ?? null;
 }
 
-/**
- * IMPORTANT:
- * If payment status is YES
- * we MUST show payment revenue.
- *
- * So fallback order:
- * paymentReceivedDate
- * -> invoiceDate
- * -> billingSubmittedDate
- */
+function getDueForBillingDate(
+  cycle: Pick<
+    BillingCycleWithPurchaseOrder,
+    "billingSubmittedDate" | "invoiceDate"
+  >,
+): Date | null {
+  return cycle.billingSubmittedDate ?? cycle.invoiceDate ?? null;
+}
+
+
 function getPaymentDate(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
@@ -427,6 +427,80 @@ export async function getMonthlyBillingData(
   }
 
   return data;
+}
+
+export async function getDueForBillingAmount(
+  year?: number,
+  filters?: BillingStatusFilters,
+) {
+  const cycles = await prisma.billingCycle.findMany({
+    where: {
+      ...(filters?.company &&
+        filters.company !== "all" && {
+          purchaseOrder: {
+            companyId: filters.company,
+          },
+        }),
+    },
+    select: {
+      billingSubmittedDate: true,
+      invoiceDate: true,
+      invoiceAmount: true,
+      invoiceNumber: true,
+      purchaseOrder: {
+        select: {
+          company: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  let totalDueForBilling = 0;
+
+  for (const cycle of cycles) {
+    const dueForBillingDate = getDueForBillingDate(cycle);
+
+    if (!dueForBillingDate) {
+      continue;
+    }
+
+    if (cycle.invoiceNumber?.trim()) {
+      continue;
+    }
+
+    const normalizedBillingDate = normalizeDate(dueForBillingDate);
+
+    if (typeof year === "number") {
+      const fyRange = getFinancialYearRange(year);
+
+      if (
+        normalizedBillingDate < fyRange.start ||
+        normalizedBillingDate > fyRange.end
+      ) {
+        continue;
+      }
+    }
+
+    if (!matchesCompanyFilter(cycle, filters)) {
+      continue;
+    }
+
+    if (!isWithinFilterDateRange(normalizedBillingDate, filters)) {
+      continue;
+    }
+
+    if (!matchesFilterMonth(normalizedBillingDate, filters)) {
+      continue;
+    }
+
+    totalDueForBilling += Number(cycle.invoiceAmount || 0);
+  }
+
+  return totalDueForBilling;
 }
 
 export async function getBillingStatusDetails(

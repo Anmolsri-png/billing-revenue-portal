@@ -11,7 +11,7 @@ const PurchaseOrdersPage = async () => {
   const purchaseOrders = res?.success && res?.data ? res.data : [];
 
 
-  const route = "/admin/module";
+  const route = "/admin/revenue";
   const canView = await canAccess(route, "view")
   if (!canView) {
     redirect("/404");

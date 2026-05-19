@@ -298,6 +298,8 @@ function MetricCard({
   icon: Icon,
   tone,
   suffix,
+  monthLabel,
+  yearLabel,
 }: {
   description: string;
   label: string;
@@ -305,6 +307,8 @@ function MetricCard({
   icon: React.ElementType;
   tone: string;
   suffix?: string;
+  monthLabel: string;
+  yearLabel: string;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
@@ -330,6 +334,14 @@ function MetricCard({
             ) : null}
           </div>
           <p className="text-xs leading-5 text-slate-400">{description}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              Month: {monthLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              Year: {yearLabel}
+            </span>
+          </div>
         </div>
         <div
           className={cn(
@@ -533,6 +545,8 @@ export function PLDashboardComponent({
     Boolean(filters.startDate),
     Boolean(filters.endDate),
   ].filter(Boolean).length;
+  const metricMonthLabel = getMonthDisplay(filters.month);
+  const metricYearLabel = formatFinancialYearLabel(filters.year);
 
   const metrics = [
     {
@@ -879,6 +893,8 @@ export function PLDashboardComponent({
                 icon={metric.icon}
                 tone={metric.tone}
                 suffix={metric.suffix}
+                monthLabel={metricMonthLabel}
+                yearLabel={metricYearLabel}
               />
             ))}
           </div>

@@ -108,6 +108,7 @@ model PurchaseOrder {
   customerId         String?          @db.Uuid
   billingPlanId      String?          @db.Uuid
   companyId          String?          @db.Uuid
+  vendorId           String?          @db.Uuid
   poOwner            String?
   remark             String?
   status             POStatus         @default(LIVE)
@@ -123,6 +124,7 @@ model PurchaseOrder {
   customer           Customer?        @relation(fields: [customerId], references: [id])
   ServiceType        ServiceType?     @relation(fields: [serviceTypeId], references: [id])
   company            Company?         @relation(fields: [companyId], references: [id])
+  vendor             Vendor?          @relation(fields: [vendorId], references: [id])
 }
 
 model BillingCycle {
@@ -190,6 +192,31 @@ model ContractType {
 model Customer {
   id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customerCode   String          @unique
+  firstName      String
+  lastName       String?
+  companyName    String?
+  email          String?         @unique
+  phone          String
+  alternatePhone String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  country        String?
+  postalCode     String?
+  gstNumber      String?         @unique
+  panNumber      String?
+  website        String?
+  status         Status          @default(ACTIVE)
+  remark         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+}
+
+model Vendor {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorCode     String          @unique
   firstName      String
   lastName       String?
   companyName    String?

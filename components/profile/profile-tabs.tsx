@@ -183,7 +183,6 @@ export function ProfileTabs({
               </div>
             </div>
           </CardHeader>
-
           <CardContent>
             <form
               onSubmit={handleInformationSubmit}

@@ -45,6 +45,7 @@ export async function getPurchaseOrders() {
         customer: true,
         billingCycles: true,
         company: true,
+        vendor: true,
       },
     });
 
@@ -123,6 +124,7 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
       startFrom: toLocalDate(validated.startFrom) ?? null,
       endDate: toLocalDate(validated.endDate) ?? null,
       companyId: emptyToUndefined(validated.companyId) ?? null,
+      vendorId: emptyToUndefined(validated.vendorId) ?? null,
       paymentTerms: emptyToUndefined(validated.paymentTerms) ?? null,
       customerId: emptyToUndefined(validated.customerId) ?? null,
       billingPlanId: billingPlanId ?? null,
@@ -159,6 +161,7 @@ export async function getPurchaseOrderById(id: string) {
         customer: true,
         billingCycles: true,
         company: true,
+        vendor: true,
       },
     });
 
@@ -189,6 +192,7 @@ export async function updatePurchaseOrder(
       startFrom: toLocalDate(validated.startFrom) ?? null,
       endDate: toLocalDate(validated.endDate) ?? null,
       companyId: emptyToUndefined(validated.companyId) ?? null,
+      vendorId: emptyToUndefined(validated.vendorId) ?? null,
       paymentTerms: emptyToUndefined(validated.paymentTerms) ?? null,
       customerId: emptyToUndefined(validated.customerId) ?? null,
       billingPlanId: billingPlanId ?? null,

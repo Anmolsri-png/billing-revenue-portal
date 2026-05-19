@@ -60,32 +60,20 @@ export const createUserSchema = userSchema.extend({
 
 export const changePasswordSchema = z
   .object({
-    currentPassword: z
-      .string()
-      .trim()
-      .min(1, "Current password is required"),
+    currentPassword: z.string().trim().min(1, "Current password is required"),
     newPassword: z
       .string()
       .trim()
       .min(6, "New password must be at least 6 characters"),
-    confirmPassword: z
-      .string()
-      .trim()
-      .min(1, "Confirm password is required"),
+    confirmPassword: z.string().trim().min(1, "Confirm password is required"),
   })
-  .refine(
-    (data) => data.newPassword === data.confirmPassword,
-    {
-      message: "New password and confirm password must match",
-      path: ["confirmPassword"],
-    },
-  );
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New password and confirm password must match",
+    path: ["confirmPassword"],
+  });
 
 export const updateCurrentUserProfileSchema = z.object({
-  firstName: z
-    .string()
-    .trim()
-    .min(1, "First name is required"),
+  firstName: z.string().trim().min(1, "First name is required"),
   lastName: z.string().trim().optional(),
 });
 
@@ -94,22 +82,13 @@ export const billingCycleSchema = z.object({
   id: z.string().optional(),
   purchaseOrderId: z.string().optional(),
 
-  billingSubmittedDate: z
-    .union([z.date(), z.string()])
-    .nullable()
-    .optional(),
+  billingSubmittedDate: z.union([z.date(), z.string()]).nullable().optional(),
 
   paymentReceived: z.nativeEnum(PaymentReceived).optional(),
 
-  paymentReceivedDate: z
-    .union([z.date(), z.string()])
-    .nullable()
-    .optional(),
+  paymentReceivedDate: z.union([z.date(), z.string()]).nullable().optional(),
 
-  paymentDueDate: z
-    .union([z.date(), z.string()])
-    .nullable()
-    .optional(),
+  paymentDueDate: z.union([z.date(), z.string()]).nullable().optional(),
 
   billingRemark: z.string().optional(),
 
@@ -123,10 +102,7 @@ export const billingCycleSchema = z.object({
     z.number().optional(),
   ),
 
-  invoiceDate: z
-    .union([z.date(), z.string()])
-    .nullable()
-    .optional(),
+  invoiceDate: z.union([z.date(), z.string()]).nullable().optional(),
 
   invoiceNumber: z.string().optional(),
 
@@ -136,15 +112,12 @@ export const billingCycleSchema = z.object({
   updatedAt: z.date().nullable().optional(),
 });
 
-const optionalTrimmedString = z.preprocess(
-  (val) => {
-    if (typeof val !== "string") return val;
+const optionalTrimmedString = z.preprocess((val) => {
+  if (typeof val !== "string") return val;
 
-    const trimmed = val.trim();
-    return trimmed === "" ? undefined : trimmed;
-  },
-  z.string().optional(),
-);
+  const trimmed = val.trim();
+  return trimmed === "" ? undefined : trimmed;
+}, z.string().optional());
 
 /* ---------------- PURCHASE ORDER ---------------- */
 export const purchaseOrderSchema = z.object({
@@ -152,13 +125,10 @@ export const purchaseOrderSchema = z.object({
 
   customerPONumber: optionalTrimmedString,
 
-  poAmount: z.preprocess(
-    (val) => {
-      if (val === "" || val === null || val === undefined) return undefined;
-      return Number(val);
-    },
-    z.number().optional(),
-  ),
+  poAmount: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    return Number(val);
+  }, z.number().optional()),
 
   serviceTypeId: optionalTrimmedString,
 
@@ -167,6 +137,8 @@ export const purchaseOrderSchema = z.object({
   contractId: optionalTrimmedString,
 
   companyId: optionalTrimmedString,
+
+  vendorId: optionalTrimmedString,
 
   startFrom: z.union([z.date(), z.string()]).nullable().optional(),
 
@@ -284,6 +256,51 @@ export const customerSchema = z.object({
   createdAt: z.date().nullable().optional(),
 
   updatedAt: z.date().optional(),
+});
+
+/* ---------------- VENDOR ---------------- */
+export const vendorSchema = z.object({
+  id: z.string().optional(),
+
+  vendorCode: z.string().optional(),
+
+  firstName: z.string().optional(),
+
+  lastName: z.string().optional(),
+
+  phone: z.string().optional(),
+
+  companyName: z.string().optional(),
+
+  alternatePhone: z.string().optional(),
+
+  email: z.string().optional(),
+
+  addressLine1: z.string().optional(),
+
+  addressLine2: z.string().optional(),
+
+  city: z.string().optional(),
+
+  state: z.string().optional(),
+
+  country: z.string().optional(),
+
+  postalCode: z.string().optional(),
+
+  gstNumber: z.string().optional(),
+
+  panNumber: z.string().optional(),
+
+  website: z.string().optional(),
+
+  remark: z.string().nullable().optional(),
+
+  status: z.nativeEnum(Status).optional(),
+
+  createdAt: z.union([z.date(), z.string()]).nullable().optional(),
+
+  updatedAt: z.union([z.date(), z.string()]).nullable().optional(),
 });
 
 /* ---------------- COMPANY ---------------- */
