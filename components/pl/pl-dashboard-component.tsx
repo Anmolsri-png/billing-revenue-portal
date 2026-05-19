@@ -618,14 +618,6 @@ export function PLDashboardComponent({
       tone: "bg-teal-500",
       suffix: "%",
     },
-    {
-      label: "Projected Profit Margin",
-      description: "Targeted profit percentage for the selection",
-      value: formatNumber(totalValues.totalProjectedProfit),
-      icon: TrendingUp,
-      tone: "bg-cyan-500",
-      suffix: "%",
-    },
   ];
 
   return (
