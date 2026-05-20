@@ -117,12 +117,6 @@ const data = {
       url: "/admin/module",
       icon: IconPackage,
     },
-
-    {
-      title: "Configuration",
-      url: "/admin/configuration",
-      icon: SettingsIcon,
-    },
   ],
 
   navSecondary: [],
