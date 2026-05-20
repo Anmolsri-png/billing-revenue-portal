@@ -238,38 +238,13 @@ const POForm = ({
   }, [endDate, form, startFrom]);
 
   useEffect(() => {
-    if (!isOTSSelected) return;
-
-    const today = moment().startOf("day").toDate();
-
-    if (!startFrom) {
-      form.setValue("startFrom", today, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-
-    if (!endDate) {
-      form.setValue("endDate", today, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-
-    if (!startFrom) return;
+    if (!isOTSSelected || !startFrom) return;
 
     const sameDay = moment(startFrom).startOf("day");
 
     if (!sameDay.isValid()) return;
 
     const sameDayDate = sameDay.toDate();
-
-    if (!endDate || !moment(endDate).isSame(sameDay, "day")) {
-      form.setValue("endDate", sameDayDate, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
 
     const existingCycle = (form.getValues("billingCycles") ?? [])[0];
 
@@ -290,7 +265,6 @@ const POForm = ({
     ]);
 
   }, [
-    endDate,
     form,
     isOTSSelected,
     replace,
