@@ -120,13 +120,14 @@ const BillingCycleForm = ({
               </FormLabel>
               <FormControl>
                 <Input
-                  className={themedInputClassName}
+                  className={cn(
+                    themedInputClassName,
+                    "cursor-not-allowed bg-slate-50/90 text-slate-600",
+                  )}
                   type="number"
                   placeholder="Enter Invoice Amount"
+                  readOnly
                   {...field}
-                  onChange={(event) =>
-                    field.onChange(Number(event.target.value))
-                  }
                 />
               </FormControl>
               <FormMessage />
