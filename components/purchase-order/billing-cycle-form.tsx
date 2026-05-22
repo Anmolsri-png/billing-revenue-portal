@@ -8,7 +8,10 @@ import { z } from "zod";
 
 import { cn } from "@/lib/utils";
 import { purchaseOrderSchema } from "@/lib/validators";
-import { formatBillingCycleLabel } from "@/lib/billing-cycle-utils";
+import {
+  formatBillingCycleLabel,
+  MONTH_NAMES,
+} from "@/lib/billing-cycle-utils";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import {
@@ -47,16 +50,30 @@ const dateButtonClassName = (hasValue?: boolean) =>
     !hasValue && "text-muted-foreground",
   );
 
+const getValidDate = (value?: Date | string | null) => {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 interface BillingCycleFormProps {
   field: BillingCycleField;
   index: number;
   form: UseFormReturn<PurchaseOrderFormValues>;
+  canEditInvoiceAmount?: boolean;
+  canRemoveCycle?: boolean;
+  onRemoveCycle?: () => void;
 }
 
 const BillingCycleForm = ({
   field,
   index,
   form,
+  canEditInvoiceAmount = false,
+  canRemoveCycle = false,
+  onRemoveCycle,
 }: BillingCycleFormProps) => {
   const invoiceDate =
     form.watch(`billingCycles.${index}.invoiceDate`) ?? field?.invoiceDate;
@@ -71,6 +88,74 @@ const BillingCycleForm = ({
   );
   const tdsAmount = Number(form.watch(`billingCycles.${index}.tds`) || 0);
   const pendingAmount = invoiceAmount - collectedAmount;
+  const poStartDate = form.watch("startFrom");
+  const poEndDate = form.watch("endDate");
+  const cycleReferenceDate =
+    getValidDate(invoiceDate) ??
+    getValidDate(billingSubmittedDate) ??
+    getValidDate(poStartDate) ??
+    getValidDate(poEndDate) ??
+    new Date();
+  const selectedMonth = cycleReferenceDate.getMonth().toString();
+  const selectedYear = cycleReferenceDate.getFullYear().toString();
+  const startYear = getValidDate(poStartDate)?.getFullYear();
+  const endYear = getValidDate(poEndDate)?.getFullYear();
+  const minYear = Math.min(
+    startYear ?? cycleReferenceDate.getFullYear(),
+    endYear ?? cycleReferenceDate.getFullYear(),
+    cycleReferenceDate.getFullYear(),
+  );
+  const maxYear = Math.max(
+    startYear ?? cycleReferenceDate.getFullYear(),
+    endYear ?? cycleReferenceDate.getFullYear(),
+    cycleReferenceDate.getFullYear() + 2,
+  );
+  const yearOptions = Array.from(
+    { length: Math.max(1, maxYear - minYear + 1) },
+    (_, yearIndex) => (minYear + yearIndex).toString(),
+  );
+
+  const updateBillingCyclePeriod = (
+    nextMonthValue: string,
+    nextYearValue: string,
+  ) => {
+    const nextMonth = Number(nextMonthValue);
+    const nextYear = Number(nextYearValue);
+
+    if (Number.isNaN(nextMonth) || Number.isNaN(nextYear)) return;
+
+    const existingInvoiceDate = getValidDate(invoiceDate);
+    const existingSubmittedDate = getValidDate(billingSubmittedDate);
+    const invoiceDay = existingInvoiceDate?.getDate() ?? 1;
+    const submittedDay = existingSubmittedDate?.getDate() ?? 1;
+    const nextInvoiceDate = new Date(nextYear, nextMonth, invoiceDay);
+    const nextSubmittedDate = existingSubmittedDate
+      ? new Date(nextYear, nextMonth, submittedDay)
+      : null;
+
+    form.setValue(`billingCycles.${index}.invoiceDate`, nextInvoiceDate, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue(`billingCycles.${index}.paymentDueDate`, nextInvoiceDate, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+
+    if (existingSubmittedDate) {
+      form.setValue(
+        `billingCycles.${index}.billingSubmittedDate`,
+        nextSubmittedDate,
+        {
+          shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
+        },
+      );
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -81,15 +166,87 @@ const BillingCycleForm = ({
           </h2>
         </div>
 
-        <div className="flex flex-wrap gap-4 text-sm font-medium">
+        <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
           <span>Invoice: Rs.{invoiceAmount.toLocaleString()}</span>
           <span>Collected: Rs.{collectedAmount.toLocaleString()}</span>
           <span>Pending: Rs.{pendingAmount.toLocaleString()}</span>
           <span>TDS: Rs.{tdsAmount.toLocaleString()}</span>
+          {canRemoveCycle && onRemoveCycle ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              onClick={onRemoveCycle}
+            >
+              Remove Cycle
+            </Button>
+          ) : null}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        {canEditInvoiceAmount ? (
+          <>
+            <FormItem className={themedFieldClassName}>
+              <FormLabel className={themedLabelClassName}>
+                Billing Month
+              </FormLabel>
+              <FormControl>
+                <Select
+                  value={selectedMonth}
+                  onValueChange={(value) =>
+                    updateBillingCyclePeriod(value, selectedYear)
+                  }
+                >
+                  <SelectTrigger className={themedSelectTriggerClassName}>
+                    <SelectValue placeholder="Select Billing Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {MONTH_NAMES.map((monthName, monthIndex) => (
+                        <SelectItem
+                          value={monthIndex.toString()}
+                          key={monthName}
+                        >
+                          {monthName}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+
+            <FormItem className={themedFieldClassName}>
+              <FormLabel className={themedLabelClassName}>
+                Billing Year
+              </FormLabel>
+              <FormControl>
+                <Select
+                  value={selectedYear}
+                  onValueChange={(value) =>
+                    updateBillingCyclePeriod(selectedMonth, value)
+                  }
+                >
+                  <SelectTrigger className={themedSelectTriggerClassName}>
+                    <SelectValue placeholder="Select Billing Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {yearOptions.map((yearValue) => (
+                        <SelectItem value={yearValue} key={yearValue}>
+                          {yearValue}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+          </>
+        ) : null}
+
         <FormField
           control={form.control}
           name={`billingCycles.${index}.invoiceNumber`}
@@ -122,12 +279,16 @@ const BillingCycleForm = ({
                 <Input
                   className={cn(
                     themedInputClassName,
-                    "cursor-not-allowed bg-slate-50/90 text-slate-600",
+                    !canEditInvoiceAmount &&
+                      "cursor-not-allowed bg-slate-50/90 text-slate-600",
                   )}
                   type="number"
                   placeholder="Enter Invoice Amount"
-                  readOnly
+                  readOnly={!canEditInvoiceAmount}
                   {...field}
+                  onChange={(event) =>
+                    field.onChange(Number(event.target.value))
+                  }
                 />
               </FormControl>
               <FormMessage />

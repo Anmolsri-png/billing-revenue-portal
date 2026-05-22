@@ -34,6 +34,12 @@ enum POStatus {
   CLOSED
 }
 
+enum PurchaseOrderType {
+  MAIL
+  AGREEMENT
+  NORMAL
+}
+
 enum BillingCycleType {
   START
   MID
@@ -111,6 +117,7 @@ model PurchaseOrder {
   vendorId           String?          @db.Uuid
   poOwner            String?
   remark             String?
+  purchaseOrderType  PurchaseOrderType?
   status             POStatus         @default(LIVE)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt

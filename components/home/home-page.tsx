@@ -1,7 +1,5 @@
-"use client";
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
@@ -10,8 +8,9 @@ import {
   IndianRupee,
   TrendingUp,
 } from "lucide-react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 type HomePageProps = {
   configuration?: {
@@ -21,21 +20,18 @@ type HomePageProps = {
 };
 
 export default function HomePage({ configuration }: HomePageProps) {
-  const router = useRouter();
   const companyName = configuration?.name || "";
   const logo = configuration?.logo || "";
 
   return (
-    <div className="min-h-screen bg-[#F5F7FB] text-slate-800 overflow-hidden">
-      {/* decorative blobs */}
-      <div className="absolute top-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-100 blur-3xl opacity-70" />
-      <div className="absolute bottom-0 left-0 h-[350px] w-[350px] rounded-full bg-indigo-100 blur-3xl opacity-60" />
+    <div className="min-h-screen overflow-hidden bg-[#F5F7FB] text-slate-800">
+      <div className="absolute top-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-100 opacity-70 blur-3xl" />
+      <div className="absolute bottom-0 left-0 h-[350px] w-[350px] rounded-full bg-indigo-100 opacity-60 blur-3xl" />
 
-      <div className="relative z-10 px-6 md:px-12 lg:px-20 py-8">
-        {/* HEADER */}
-        <header className="flex items-center justify-between mb-16">
+      <div className="relative z-10 px-6 py-8 md:px-12 lg:px-20">
+        <header className="mb-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {logo && (
+            {logo ? (
               <Image
                 src={logo}
                 alt={companyName}
@@ -43,71 +39,68 @@ export default function HomePage({ configuration }: HomePageProps) {
                 height={48}
                 className="rounded-xl shadow-md"
               />
-            )}
+            ) : null}
             <h1 className="text-2xl font-bold uppercase tracking-wide">
               {companyName}
             </h1>
           </div>
         </header>
 
-        {/* HERO */}
-        <section className="grid lg:grid-cols-2 gap-10 items-center mb-24">
-          {/* Left */}
+        <section className="mb-24 grid items-center gap-10 lg:grid-cols-2">
           <div>
-            <p className="text-blue-600 font-medium mb-4">
+            <p className="mb-4 font-medium text-blue-600">
               Financial Operations Simplified
             </p>
 
-            <h2 className="text-5xl md:text-6xl font-bold leading-tight">
+            <h2 className="text-5xl font-bold leading-tight md:text-6xl">
               One Portal for
-              <span className="block text-blue-600">
-                Revenue & Billing
-              </span>
+              <span className="block text-blue-600">Revenue & Billing</span>
             </h2>
 
-            <p className="text-slate-500 text-lg mt-6 max-w-xl leading-relaxed">
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-500">
               Manage revenue streams, billing workflows, and profit analysis in
               one clean and reliable workspace.
             </p>
 
-            <div className="flex flex-wrap gap-4 mt-8">
+            <div className="mt-8 flex flex-wrap gap-4">
               <Button
+                asChild
                 size="lg"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-7 rounded-2xl"
-                onClick={() => router.push("/admin/dashboard?tab=revenue")}
+                className="rounded-2xl bg-blue-600 px-7 text-white hover:bg-blue-700"
               >
-                Open Revenue Dashboard
+                <Link href="/admin/dashboard?tab=revenue">
+                  Open Revenue Dashboard
+                </Link>
               </Button>
 
               <Button
+                asChild
                 size="lg"
                 variant="outline"
                 className="rounded-2xl px-7"
-                onClick={() => router.push("/admin/dashboard?tab=pl")}
               >
-                Open P&L
+                <Link href="/admin/dashboard?tab=pl">Open P&amp;L</Link>
               </Button>
             </div>
           </div>
 
-          {/* Right */}
           <div className="relative">
-            <Card className="rounded-3xl shadow-xl border-none bg-white">
+            <Card className="rounded-3xl border-none bg-white shadow-xl">
               <CardContent className="p-8">
                 <div className="grid gap-5">
-                  <div className="rounded-2xl bg-blue-50 p-5 flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-2xl bg-blue-50 p-5">
                     <div>
                       <h4 className="font-semibold">Revenue Tracking</h4>
                       <p className="text-sm text-slate-500">
-                        Monitor payments & collections
+                        Monitor payments &amp; collections
                       </p>
                     </div>
                     <DollarSign className="text-blue-600" />
                   </div>
 
-                  <div className="rounded-2xl bg-indigo-50 p-5 flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-2xl bg-indigo-50 p-5">
                     <div>
-                      <h4 className="font-semibold">Profit & Loss</h4>
+                      <h4 className="font-semibold">Profit &amp; Loss</h4>
                       <p className="text-sm text-slate-500">
                         Analyze performance
                       </p>
@@ -115,7 +108,7 @@ export default function HomePage({ configuration }: HomePageProps) {
                     <BarChart3 className="text-indigo-600" />
                   </div>
 
-                  <div className="rounded-2xl bg-sky-50 p-5 flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-2xl bg-sky-50 p-5">
                     <div>
                       <h4 className="font-semibold">Billing Management</h4>
                       <p className="text-sm text-slate-500">
@@ -128,8 +121,7 @@ export default function HomePage({ configuration }: HomePageProps) {
               </CardContent>
             </Card>
 
-            {/* floating mini card */}
-            <div className="absolute -top-6 -left-9 bg-white rounded-2xl shadow-lg px-5 py-4 flex items-center gap-3">
+            <div className="absolute -top-6 -left-9 flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-lg">
               <TrendingUp className="text-green-500" />
               <div>
                 <p className="text-sm font-semibold">Smarter Decisions</p>
@@ -139,8 +131,7 @@ export default function HomePage({ configuration }: HomePageProps) {
           </div>
         </section>
 
-        {/* FEATURES */}
-        <section className="grid md:grid-cols-3 gap-6 mb-24">
+        <section className="mb-24 grid gap-6 md:grid-cols-3">
           {[
             {
               icon: IndianRupee,
@@ -157,43 +148,45 @@ export default function HomePage({ configuration }: HomePageProps) {
               title: "Billing Control",
               desc: "Manage billing efficiently.",
             },
-          ].map((item, i) => (
+          ].map((item, index) => (
             <Card
-              key={i}
-              className={`rounded-3xl border-none shadow-md hover:shadow-xl transition-all ${i === 1 ? "md:-mt-6" : ""
-                }`}
+              key={item.title}
+              className={`rounded-3xl border-none shadow-md transition-all hover:shadow-xl ${
+                index === 1 ? "md:-mt-6" : ""
+              }`}
             >
               <CardContent className="p-8">
-                <item.icon className="h-8 w-8 text-blue-600 mb-4" />
+                <item.icon className="mb-4 h-8 w-8 text-blue-600" />
                 <h3 className="text-xl font-semibold">{item.title}</h3>
-                <p className="text-slate-500 mt-2">{item.desc}</p>
+                <p className="mt-2 text-slate-500">{item.desc}</p>
               </CardContent>
             </Card>
           ))}
         </section>
 
-        {/* CTA */}
-        <section className="bg-white rounded-[32px] shadow-lg p-10 flex flex-col md:flex-row items-center justify-between">
+        <section className="flex flex-col items-center justify-between rounded-[32px] bg-white p-10 shadow-lg md:flex-row">
           <div>
             <h3 className="text-3xl font-bold">Ready to manage finances?</h3>
-            <p className="text-slate-500 mt-2">
+            <p className="mt-2 text-slate-500">
               Access your dashboards and insights instantly.
             </p>
           </div>
 
           <Button
+            asChild
             size="lg"
-            className="mt-5 md:mt-0 bg-blue-600 hover:bg-blue-700 rounded-2xl"
-            onClick={() => router.push("/admin/dashboard?tab=pl")}
+            className="mt-5 rounded-2xl bg-blue-600 hover:bg-blue-700 md:mt-0"
           >
-            Get Started
-            <ArrowRight className="ml-2 h-5 w-5" />
+            <Link href="/admin/dashboard?tab=pl">
+              Get Started
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </Button>
         </section>
 
-        {/* FOOTER */}
-        <footer className="text-center text-sm text-slate-500 mt-12">
-          © {new Date().getFullYear()} {companyName}. All rights reserved.
+        <footer className="mt-12 text-center text-sm text-slate-500">
+          Copyright {new Date().getFullYear()} {companyName}. All rights
+          reserved.
         </footer>
       </div>
     </div>

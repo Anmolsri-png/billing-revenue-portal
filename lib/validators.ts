@@ -5,12 +5,20 @@ import {
   POStatus,
   OrderType,
   CompanyStatus,
+  PurchaseOrderType,
 } from "@prisma/client";
 
 /* ---------------- ENUMS ---------------- */
 export const statusEnum = z.nativeEnum(Status).optional();
 export const paymentReceivedEnum = z.nativeEnum(PaymentReceived).optional();
 export const poStatusEnum = z.nativeEnum(POStatus).optional();
+export const purchaseOrderTypeEnum = z.preprocess((val) => {
+  if (val == null) return undefined;
+  if (typeof val !== "string") return val;
+
+  const normalized = val.trim().toUpperCase();
+  return normalized === "" ? undefined : normalized;
+}, z.nativeEnum(PurchaseOrderType).optional());
 
 /* ---------------- AUTH ---------------- */
 export const loginFormSchema = z.object({
@@ -153,6 +161,8 @@ export const purchaseOrderSchema = z.object({
   poOwner: optionalTrimmedString,
 
   billingCycles: z.array(billingCycleSchema).optional().default([]),
+
+  purchaseOrderType: purchaseOrderTypeEnum,
 
   status: z.nativeEnum(POStatus).optional(),
 

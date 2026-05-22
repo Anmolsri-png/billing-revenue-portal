@@ -18,6 +18,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Form,
   FormField,
   FormItem,
@@ -36,7 +44,7 @@ import {
 } from "../ui/select";
 import BillingCycleForm from "./billing-cycle-form";
 import { Calendar } from "../ui/calendar";
-import { Loader2, ArrowRight, CalendarIcon } from "lucide-react";
+import { Loader2, ArrowRight, CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   themedFieldClassName,
@@ -54,7 +62,7 @@ import {
   createPurchaseOrder,
   updatePurchaseOrder,
 } from "@/lib/actions/purschase-order";
-import { POStatus, PaymentReceived } from "@prisma/client";
+import { POStatus, PaymentReceived, PurchaseOrderType } from "@prisma/client";
 import {
   BillingPlan,
   Company,
@@ -70,6 +78,7 @@ import { Card, CardContent } from "../ui/card";
 import { Skeleton } from "../ui/skeleton";
 import {
   formatBillingCycleLabel,
+  MONTH_NAMES,
   generatePurchaseOrderBillingCycles,
   resolveBillingPlanInterval,
 } from "@/lib/billing-cycle-utils";
@@ -107,6 +116,7 @@ const defaultPurchaseOrderValues: PurchaseOrderFormValues = {
   vendorId: "",
   poOwner: "",
   status: POStatus.LIVE,
+  purchaseOrderType: undefined,
   startFrom: undefined,
   endDate: undefined,
   ageingDays: 0,
@@ -117,6 +127,60 @@ const defaultPurchaseOrderValues: PurchaseOrderFormValues = {
 
 type PurchaseOrderBillingCycle =
   PurchaseOrderFormValues["billingCycles"][number];
+
+const normalizePurchaseOrderType = (value?: string | null) => {
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim().toUpperCase();
+
+  return Object.values(PurchaseOrderType).includes(
+    normalized as PurchaseOrderType,
+  )
+    ? (normalized as PurchaseOrderType)
+    : undefined;
+};
+
+const supportsManualPurchaseOrderBillingCycles = (
+  purchaseOrderType?: PurchaseOrderType,
+) =>
+  purchaseOrderType === PurchaseOrderType.MAIL ||
+  purchaseOrderType === PurchaseOrderType.AGREEMENT;
+
+const getManualBillingCycleAnchorDate = (
+  startDate?: Date | string | null,
+  finishDate?: Date | string | null,
+) => {
+  const startMoment = startDate ? moment(startDate) : null;
+
+  if (startMoment?.isValid()) {
+    return startMoment.startOf("day").toDate();
+  }
+
+  const endMoment = finishDate ? moment(finishDate) : null;
+
+  if (endMoment?.isValid()) {
+    return endMoment.startOf("day").toDate();
+  }
+
+  return undefined;
+};
+
+const areDatesEquivalent = (
+  first?: Date | string | null,
+  second?: Date | string | null,
+) => {
+  if (!first && !second) return true;
+  if (!first || !second) return false;
+
+  const firstDate = moment(first);
+  const secondDate = moment(second);
+
+  if (!firstDate.isValid() || !secondDate.isValid()) {
+    return String(first) === String(second);
+  }
+
+  return firstDate.isSame(secondDate, "day");
+};
 
 const getCycleMonthYear = (cycle?: PurchaseOrderBillingCycle) => {
   const cycleDate = cycle?.invoiceDate ?? cycle?.billingSubmittedDate;
@@ -143,6 +207,36 @@ const getDefaultPaymentDueDate = (
     null
   );
 };
+
+const createBillingCycleDraft = ({
+  existingCycle,
+  anchorDate,
+  invoiceAmount = 0,
+  preserveInvoiceAmount = true,
+}: {
+  existingCycle?: Partial<PurchaseOrderBillingCycle> | null;
+  anchorDate?: Date | null;
+  invoiceAmount?: number;
+  preserveInvoiceAmount?: boolean;
+}): PurchaseOrderBillingCycle => ({
+  id: existingCycle?.id,
+  invoiceNumber: existingCycle?.invoiceNumber ?? "",
+  invoiceAmount: preserveInvoiceAmount
+    ? Number(existingCycle?.invoiceAmount ?? invoiceAmount)
+    : Number(invoiceAmount),
+  collectedAmount: Number(existingCycle?.collectedAmount ?? 0),
+  invoiceDate: existingCycle?.invoiceDate ?? anchorDate ?? undefined,
+  billingSubmittedDate: existingCycle?.billingSubmittedDate ?? undefined,
+  paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
+  paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
+  paymentDueDate:
+    getDefaultPaymentDueDate(existingCycle) ?? anchorDate ?? null,
+  billingRemark: existingCycle?.billingRemark ?? "",
+  tds: Number(existingCycle?.tds ?? 0),
+});
+
+const getDateFromMonthYear = (month: number, year: number) =>
+  new Date(year, month, 1);
 
 const isOTSContractType = (name?: string | null) => {
   const normalizedName = name?.trim().toLowerCase() ?? "";
@@ -188,20 +282,38 @@ const POForm = ({
   // ---------------- FORM ----------------
   const form = useForm<PurchaseOrderFormValues>({
     resolver: zodResolver(purchaseOrderSchema) as Resolver<PurchaseOrderFormValues>,
-    defaultValues: (data ?? defaultPurchaseOrderValues) as PurchaseOrderFormValues,
+    defaultValues: {
+      ...(data ?? defaultPurchaseOrderValues),
+      purchaseOrderType: normalizePurchaseOrderType(data?.purchaseOrderType),
+    } as PurchaseOrderFormValues,
   });
 
-  const { fields, replace } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "billingCycles",
   });
 
   const [selectedCycleIndex, setSelectedCycleIndex] = useState(0);
+  const [isAddCycleDialogOpen, setIsAddCycleDialogOpen] = useState(false);
 
   // ---------------- WATCHERS ----------------
-  const [watchBillingPlan, watchPOAmount, watchContractId, startFrom, endDate] = useWatch({
+  const [
+    watchBillingPlan,
+    watchPOAmount,
+    watchContractId,
+    startFrom,
+    endDate,
+    watchPurchaseOrderType,
+  ] = useWatch({
     control: form.control,
-    name: ["billingPlanId", "poAmount", "contractId", "startFrom", "endDate"],
+    name: [
+      "billingPlanId",
+      "poAmount",
+      "contractId",
+      "startFrom",
+      "endDate",
+      "purchaseOrderType",
+    ],
   });
   const watchedBillingCycles =
     useWatch({
@@ -212,6 +324,16 @@ const POForm = ({
     fields.length === 0
       ? 0
       : Math.min(selectedCycleIndex, fields.length - 1);
+  const defaultCycleAnchorDate = React.useMemo(
+    () => getManualBillingCycleAnchorDate(startFrom, endDate) ?? new Date(),
+    [endDate, startFrom],
+  );
+  const [pendingCycleMonth, setPendingCycleMonth] = useState(
+    defaultCycleAnchorDate.getMonth().toString(),
+  );
+  const [pendingCycleYear, setPendingCycleYear] = useState(
+    defaultCycleAnchorDate.getFullYear().toString(),
+  );
   const selectedContractType = React.useMemo(
     () =>
       contractType.find(
@@ -223,9 +345,146 @@ const POForm = ({
     () => isOTSContractType(selectedContractType?.name),
     [selectedContractType?.name],
   );
+  const canManageManualBillingCycles = React.useMemo(
+    () =>
+      isOTSSelected ||
+      supportsManualPurchaseOrderBillingCycles(watchPurchaseOrderType),
+    [isOTSSelected, watchPurchaseOrderType],
+  );
+  const isInitialUpdateGenerationState = React.useMemo(() => {
+    if (!update || !data) return false;
+
+    return (
+      String(watchBillingPlan ?? "") === String(data.billingPlanId ?? "") &&
+      Number(watchPOAmount ?? 0) === Number(data.poAmount ?? 0) &&
+      String(watchContractId ?? "") === String(data.contractId ?? "") &&
+      normalizePurchaseOrderType(watchPurchaseOrderType) ===
+        normalizePurchaseOrderType(data.purchaseOrderType) &&
+      areDatesEquivalent(startFrom, data.startFrom) &&
+      areDatesEquivalent(endDate, data.endDate)
+    );
+  }, [
+    data,
+    endDate,
+    startFrom,
+    update,
+    watchBillingPlan,
+    watchContractId,
+    watchPOAmount,
+    watchPurchaseOrderType,
+  ]);
 
   const [isPending, startTransition] = React.useTransition();
   const skipInitialAutoGenerationRef = React.useRef(update);
+
+  const billingCycleYearOptions = React.useMemo(() => {
+    const years = new Set<number>([
+      defaultCycleAnchorDate.getFullYear(),
+      defaultCycleAnchorDate.getFullYear() + 1,
+      defaultCycleAnchorDate.getFullYear() + 2,
+    ]);
+
+    const startYear = startFrom ? moment(startFrom).year() : null;
+    const endYear = endDate ? moment(endDate).year() : null;
+
+    if (startYear) years.add(startYear);
+    if (endYear) years.add(endYear);
+
+    return Array.from(years)
+      .sort((firstYear, secondYear) => firstYear - secondYear)
+      .map((year) => year.toString());
+  }, [defaultCycleAnchorDate, endDate, startFrom]);
+
+  const openAddBillingCycleDialog = React.useCallback(() => {
+    setPendingCycleMonth(defaultCycleAnchorDate.getMonth().toString());
+    setPendingCycleYear(defaultCycleAnchorDate.getFullYear().toString());
+    setIsAddCycleDialogOpen(true);
+  }, [defaultCycleAnchorDate]);
+
+  const addManualBillingCycle = React.useCallback(() => {
+    const selectedMonth = Number(pendingCycleMonth);
+    const selectedYear = Number(pendingCycleYear);
+
+    if (Number.isNaN(selectedMonth) || Number.isNaN(selectedYear)) {
+      toast.error("Select billing month and year");
+      return;
+    }
+
+    const anchorDate = getDateFromMonthYear(selectedMonth, selectedYear);
+    const existingCycles = form.getValues("billingCycles") ?? [];
+    const cycleAlreadyExists = existingCycles.some((cycle) => {
+      const cycleMonthYear = getCycleMonthYear(cycle);
+
+      return (
+        cycleMonthYear?.month === selectedMonth &&
+        cycleMonthYear?.year === selectedYear
+      );
+    });
+
+    if (cycleAlreadyExists) {
+      toast.error("Billing cycle already exists for that month and year");
+      return;
+    }
+
+    const nextIndex = fields.length;
+
+    append(
+      createBillingCycleDraft({
+        anchorDate,
+        invoiceAmount: 0,
+      }),
+    );
+    setSelectedCycleIndex(nextIndex);
+    setIsAddCycleDialogOpen(false);
+  }, [append, fields.length, form, pendingCycleMonth, pendingCycleYear]);
+
+  const removeManualBillingCycle = React.useCallback(
+    (index: number) => {
+      const cycleCount = form.getValues("billingCycles")?.length ?? 0;
+
+      if (cycleCount <= 1) return;
+
+      remove(index);
+      setSelectedCycleIndex((currentIndex) => {
+        if (currentIndex === index) {
+          return Math.max(0, index - 1);
+        }
+
+        if (currentIndex > index) {
+          return currentIndex - 1;
+        }
+
+        return currentIndex;
+      });
+    },
+    [form, remove],
+  );
+
+  useEffect(() => {
+    if (!canManageManualBillingCycles) return;
+
+    const existingCycles = form.getValues("billingCycles") ?? [];
+
+    if (existingCycles.length > 0) return;
+
+    const anchorDate = getManualBillingCycleAnchorDate(startFrom, endDate);
+
+    if (!anchorDate) return;
+
+    replace([
+      createBillingCycleDraft({
+        anchorDate,
+        invoiceAmount: Number(watchPOAmount ?? 0),
+      }),
+    ]);
+  }, [
+    canManageManualBillingCycles,
+    endDate,
+    form,
+    replace,
+    startFrom,
+    watchPOAmount,
+  ]);
 
   useEffect(() => {
     if (startFrom && endDate) {
@@ -238,35 +497,32 @@ const POForm = ({
   }, [endDate, form, startFrom]);
 
   useEffect(() => {
-    if (!isOTSSelected || !startFrom) return;
+    if (!canManageManualBillingCycles) return;
 
-    const sameDay = moment(startFrom).startOf("day");
+    const existingCycles = form.getValues("billingCycles") ?? [];
 
-    if (!sameDay.isValid()) return;
+    if (existingCycles.length === 0) {
+      return;
+    }
 
-    const sameDayDate = sameDay.toDate();
+    const anchorDate = getManualBillingCycleAnchorDate(startFrom, endDate);
+    const normalizedCycles = existingCycles.map((cycle, index) =>
+      createBillingCycleDraft({
+        existingCycle: cycle,
+        anchorDate,
+        invoiceAmount:
+          existingCycles.length === 1 && index === 0
+            ? Number(watchPOAmount ?? 0)
+            : Number(cycle?.invoiceAmount ?? 0),
+        preserveInvoiceAmount: !(existingCycles.length === 1 && index === 0),
+      }),
+    );
 
-    const existingCycle = (form.getValues("billingCycles") ?? [])[0];
-
-    replace([
-      {
-        id: existingCycle?.id,
-        invoiceNumber: existingCycle?.invoiceNumber ?? "",
-        invoiceAmount: Number(watchPOAmount ?? 0),
-        collectedAmount: Number(existingCycle?.collectedAmount ?? 0),
-        invoiceDate: sameDayDate,
-        billingSubmittedDate: undefined,
-        paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
-        paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
-        paymentDueDate: sameDayDate,
-        billingRemark: existingCycle?.billingRemark ?? "",
-        tds: Number(existingCycle?.tds ?? 0),
-      },
-    ]);
-
+    replace(normalizedCycles);
   }, [
+    canManageManualBillingCycles,
+    endDate,
     form,
-    isOTSSelected,
     replace,
     startFrom,
     watchPOAmount,
@@ -290,7 +546,7 @@ const POForm = ({
 
   // ---------------- AUTO BILLING CYCLES ----------------
   useEffect(() => {
-    if (isOTSSelected) return;
+    if (canManageManualBillingCycles) return;
     if (!watchBillingPlan || watchPOAmount == null || !startFrom || !endDate) {
       return;
     }
@@ -317,7 +573,10 @@ const POForm = ({
 
     if (skipInitialAutoGenerationRef.current) {
       skipInitialAutoGenerationRef.current = false;
-      return;
+
+      if (isInitialUpdateGenerationState) {
+        return;
+      }
     }
 
     const generatedCycles = generatePurchaseOrderBillingCycles({
@@ -377,7 +636,9 @@ const POForm = ({
     watchBillingPlan,
     watchContractId,
     watchPOAmount,
-    isOTSSelected,
+    watchPurchaseOrderType,
+    canManageManualBillingCycles,
+    isInitialUpdateGenerationState,
   ]);
 
   // ---------------- UPDATE MODE ----------------
@@ -434,6 +695,7 @@ const POForm = ({
       paymentTerms: data.paymentTerms ?? "",
       poOwner: data.poOwner ?? "",
       status: data.status,
+      purchaseOrderType: normalizePurchaseOrderType(data.purchaseOrderType),
 
       startFrom: data.startFrom ? new Date(data.startFrom) : undefined,
       endDate: data.endDate ? new Date(data.endDate) : undefined,
@@ -523,6 +785,41 @@ const POForm = ({
           {/* ================= GENERAL TAB ================= */}
           <TabsContent value="general" className="mt-6">
             <div className={cn(themedSectionClassName, "grid grid-cols-1 gap-6 md:grid-cols-2")}>
+              {/* Purchase Order Type */}
+              <FormField
+                control={form.control}
+                name="purchaseOrderType"
+                render={({ field }) => (
+                  <FormItem className={themedFieldClassName}>
+                    <FormLabel className={themedLabelClassName}>Purchase Order Type</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? ""}
+                        onValueChange={(value) => field.onChange(value || undefined)}
+                      >
+                        <SelectTrigger className={themedSelectTriggerClassName}>
+                          <SelectValue placeholder="Select Purchase Order Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value={PurchaseOrderType.MAIL}>
+                              Mail
+                            </SelectItem>
+                            <SelectItem value={PurchaseOrderType.AGREEMENT}>
+                              Agreement
+                            </SelectItem>
+                            <SelectItem value={PurchaseOrderType.NORMAL}>
+                              Normal
+                            </SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               {/* Customer PO Number */}
               <FormField
                 control={form.control}
@@ -785,7 +1082,7 @@ const POForm = ({
                 name="scope"
                 render={({ field }) => (
                   <FormItem className={themedFieldClassName}>
-                    <FormLabel className={themedLabelClassName}>Scope</FormLabel>
+                    <FormLabel className={themedLabelClassName}>Scope Of Work</FormLabel>
                     <FormControl>
                       <Input className={themedInputClassName} {...field} />
                     </FormControl>
@@ -979,7 +1276,7 @@ const POForm = ({
                   </FormItem>
                 )}
               />
-
+              
               {/* Remark */}
               <FormField
                 control={form.control}
@@ -1005,22 +1302,44 @@ const POForm = ({
           <TabsContent value="billing-cycle" className="mt-6">
             {fields.length > 0 ? (
               <div className="space-y-6">
-                <div className="flex flex-wrap gap-3">
-                  {fields.map((field, index) => (
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap gap-3">
+                    {fields.map((field, index) => (
+                      <Button
+                        key={field.id}
+                        type="button"
+                        variant={activeCycleIndex === index ? "default" : "outline"}
+                        className="min-w-[120px] justify-start px-4"
+                        onClick={() => setSelectedCycleIndex(index)}
+                      >
+                        {formatBillingCycleLabel(
+                          watchedBillingCycles[index]?.invoiceDate ??
+                            watchedBillingCycles[index]?.billingSubmittedDate,
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {canManageManualBillingCycles ? (
                     <Button
-                      key={field.id}
                       type="button"
-                      variant={activeCycleIndex === index ? "default" : "outline"}
-                      className="min-w-[120px] justify-start px-4"
-                      onClick={() => setSelectedCycleIndex(index)}
+                      variant="outline"
+                      className="border-sky-200 text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+                      onClick={openAddBillingCycleDialog}
                     >
-                      {formatBillingCycleLabel(
-                        watchedBillingCycles[index]?.invoiceDate ??
-                          watchedBillingCycles[index]?.billingSubmittedDate,
-                      )}
+                      <Plus className="h-4 w-4" />
+                      Add Billing Cycle
                     </Button>
-                  ))}
+                  ) : null}
                 </div>
+
+                {canManageManualBillingCycles ? (
+                  <p className="text-sm text-slate-500">
+                    For OTS, Mail, and Agreement purchase orders, you can add
+                    multiple billing cycles and enter each invoice amount
+                    manually.
+                  </p>
+                ) : null}
 
                 <Card className={formCardClassName}>
                   <CardContent className="pt-6">
@@ -1032,6 +1351,13 @@ const POForm = ({
                       field={fields[activeCycleIndex]}
                       index={activeCycleIndex}
                       form={form}
+                      canEditInvoiceAmount={canManageManualBillingCycles}
+                      canRemoveCycle={
+                        canManageManualBillingCycles && fields.length > 1
+                      }
+                      onRemoveCycle={() =>
+                        removeManualBillingCycle(activeCycleIndex)
+                      }
                     />
                   </CardContent>
                 </Card>
@@ -1039,7 +1365,20 @@ const POForm = ({
             ) : (
               <Card className="border border-dashed border-sky-200 bg-gradient-to-b from-white to-sky-50/70 shadow-[0_20px_52px_-34px_rgba(14,165,233,0.32)]">
                 <CardContent className="py-10 text-center text-slate-500">
-                  No billing cycles generated yet.
+                  <div className="space-y-4">
+                    <p>No billing cycles generated yet.</p>
+                    {canManageManualBillingCycles ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-sky-200 text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+                        onClick={openAddBillingCycleDialog}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Billing Cycle
+                      </Button>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -1062,6 +1401,88 @@ const POForm = ({
           </Button>
         </div>
       </form>
+
+      <Dialog
+        open={isAddCycleDialogOpen}
+        onOpenChange={setIsAddCycleDialogOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Billing Cycle</DialogTitle>
+            <DialogDescription>
+              Choose the month and year for the billing cycle you want to add.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <FormItem className={themedFieldClassName}>
+              <FormLabel className={themedLabelClassName}>
+                Billing Month
+              </FormLabel>
+              <FormControl>
+                <Select
+                  value={pendingCycleMonth}
+                  onValueChange={setPendingCycleMonth}
+                >
+                  <SelectTrigger className={themedSelectTriggerClassName}>
+                    <SelectValue placeholder="Select Billing Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {MONTH_NAMES.map((monthName, monthIndex) => (
+                        <SelectItem
+                          value={monthIndex.toString()}
+                          key={monthName}
+                        >
+                          {monthName}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+
+            <FormItem className={themedFieldClassName}>
+              <FormLabel className={themedLabelClassName}>
+                Billing Year
+              </FormLabel>
+              <FormControl>
+                <Select
+                  value={pendingCycleYear}
+                  onValueChange={setPendingCycleYear}
+                >
+                  <SelectTrigger className={themedSelectTriggerClassName}>
+                    <SelectValue placeholder="Select Billing Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {billingCycleYearOptions.map((yearValue) => (
+                        <SelectItem value={yearValue} key={yearValue}>
+                          {yearValue}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+            </FormItem>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddCycleDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={addManualBillingCycle}>
+              Add Cycle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   );
 };
