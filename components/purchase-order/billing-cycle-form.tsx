@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { PaymentReceived } from "@prisma/client";
-import { UseFormReturn } from "react-hook-form";
+import { FieldPathValue, UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
 import { cn } from "@/lib/utils";
@@ -42,6 +42,10 @@ import {
 
 type PurchaseOrderFormValues = z.infer<typeof purchaseOrderSchema>;
 type BillingCycleField = PurchaseOrderFormValues["billingCycles"][number];
+type BillingCycleDateFieldName =
+  | `billingCycles.${number}.invoiceDate`
+  | `billingCycles.${number}.paymentDueDate`
+  | `billingCycles.${number}.billingSubmittedDate`;
 
 const dateButtonClassName = (hasValue?: boolean) =>
   cn(
@@ -75,6 +79,17 @@ const BillingCycleForm = ({
   canRemoveCycle = false,
   onRemoveCycle,
 }: BillingCycleFormProps) => {
+  const setBillingCycleDateValue = <TFieldName extends BillingCycleDateFieldName>(
+    name: TFieldName,
+    value: FieldPathValue<PurchaseOrderFormValues, TFieldName>,
+  ) => {
+    form.setValue(name, value, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  };
+
   const invoiceDate =
     form.watch(`billingCycles.${index}.invoiceDate`) ?? field?.invoiceDate;
   const billingSubmittedDate =
@@ -133,26 +148,19 @@ const BillingCycleForm = ({
       ? new Date(nextYear, nextMonth, submittedDay)
       : null;
 
-    form.setValue(`billingCycles.${index}.invoiceDate`, nextInvoiceDate, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    form.setValue(`billingCycles.${index}.paymentDueDate`, nextInvoiceDate, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
+    setBillingCycleDateValue(
+      `billingCycles.${index}.invoiceDate`,
+      nextInvoiceDate,
+    );
+    setBillingCycleDateValue(
+      `billingCycles.${index}.paymentDueDate`,
+      nextInvoiceDate,
+    );
 
     if (existingSubmittedDate) {
-      form.setValue(
+      setBillingCycleDateValue(
         `billingCycles.${index}.billingSubmittedDate`,
         nextSubmittedDate,
-        {
-          shouldDirty: true,
-          shouldTouch: true,
-          shouldValidate: true,
-        },
       );
     }
   };
@@ -371,14 +379,9 @@ const BillingCycleForm = ({
                       selected={field.value as Date}
                       onSelect={(date) => {
                         field.onChange(date);
-                        form.setValue(
+                        setBillingCycleDateValue(
                           `billingCycles.${index}.paymentDueDate`,
                           date ?? null,
-                          {
-                            shouldDirty: true,
-                            shouldTouch: true,
-                            shouldValidate: true,
-                          },
                         );
                       }}
                     />
