@@ -237,15 +237,17 @@ function getPaymentDate(
     | "collectedAmount"
   >,
 ): Date | null {
-  // Only use paymentReceivedDate for payment charting
-  // This ensures payments are categorized in the correct fiscal year
-  // Do NOT fall back to invoiceDate as that causes FY mismatches
+  // Priority 1: Use actual payment received date if recorded
   if (cycle.paymentReceivedDate) {
     return cycle.paymentReceivedDate;
   }
 
-  // If paymentReceived is YES but no payment date recorded, return null
-  // The payment amount should not be counted in charts until date is recorded
+  // Priority 2: If marked as received (YES) but no date recorded,
+  // use invoice/billing date as reference for fiscal year mapping
+  if (cycle.paymentReceived === PaymentReceived.YES) {
+    return cycle.invoiceDate ?? cycle.billingSubmittedDate ?? null;
+  }
+
   return null;
 }
 
