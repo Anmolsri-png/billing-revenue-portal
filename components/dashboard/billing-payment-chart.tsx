@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Line, LineChart, CartesianGrid, XAxis } from "recharts"
 
+import { getMonthlyBillingData } from "@/lib/actions/dashboard"
 import {
   ChartContainer,
   ChartTooltip,
@@ -30,8 +31,24 @@ const chartConfig = {
 
 export function BillingPaymentChart() {
   const [year, setYear] = useState("2025")
+  const [chartData, setChartData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const chartData: any[] = []
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true)
+      try {
+        const data = await getMonthlyBillingData(Number(year))
+        setChartData(data)
+      } catch (error) {
+        console.error("Failed to fetch billing data:", error)
+        setChartData([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [year])
 
   return (
     <div className="space-y-4">
@@ -46,6 +63,7 @@ export function BillingPaymentChart() {
           <SelectContent>
             <SelectItem value="2024">FY 2024-25</SelectItem>
             <SelectItem value="2025">FY 2025-26</SelectItem>
+            <SelectItem value="2026">FY 2026-27</SelectItem>
           </SelectContent>
         </Select>
       </div>
