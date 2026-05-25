@@ -48,6 +48,26 @@ function normalizePlanName(planName?: string | null) {
   return planName?.trim().toLowerCase() ?? "";
 }
 
+function normalizePlanKey(planName?: string | null) {
+  return normalizePlanName(planName).replace(/[^a-z0-9]/g, "");
+}
+
+function matchesPlanVariant(
+  normalizedPlanName: string,
+  normalizedPlanKey: string,
+  variants: string[],
+) {
+  return variants.some((variant) => {
+    const normalizedVariant = variant.toLowerCase();
+    const normalizedVariantKey = normalizedVariant.replace(/[^a-z0-9]/g, "");
+
+    return (
+      normalizedPlanName.includes(normalizedVariant) ||
+      normalizedPlanKey.includes(normalizedVariantKey)
+    );
+  });
+}
+
 function getMidpointDate(startDate: Date, endDate: Date) {
   const start = startOfDay(startDate);
   const end = startOfDay(endDate);
@@ -61,10 +81,13 @@ export function resolveBillingPlanInterval(
   planName?: string | null,
 ) {
   const normalizedPlanName = normalizePlanName(planName);
+  const normalizedPlanKey = normalizePlanKey(planName);
 
   if (
-    normalizedPlanName.includes("milestone") ||
-    normalizedPlanName.includes("custom")
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "milestone",
+      "custom",
+    ])
   ) {
     return {
       autoGenerate: false,
@@ -74,9 +97,11 @@ export function resolveBillingPlanInterval(
   }
 
   if (
-    normalizedPlanName.includes("one-time") ||
-    normalizedPlanName.includes("one time") ||
-    normalizedPlanName.includes("onetime")
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "one-time",
+      "one time",
+      "onetime",
+    ])
   ) {
     return {
       autoGenerate: true,
@@ -85,7 +110,12 @@ export function resolveBillingPlanInterval(
     };
   }
 
-  if (normalizedPlanName.includes("monthly")) {
+  if (
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "monthly",
+      "month",
+    ])
+  ) {
     return {
       autoGenerate: true,
       singleCycle: false,
@@ -93,7 +123,17 @@ export function resolveBillingPlanInterval(
     };
   }
 
-  if (normalizedPlanName.includes("quarter")) {
+  if (
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "quarter",
+      "quarterly",
+      "quater",
+      "quaterly",
+      "qutar",
+      "qutarely",
+      "qtr",
+    ])
+  ) {
     return {
       autoGenerate: true,
       singleCycle: false,
@@ -102,10 +142,15 @@ export function resolveBillingPlanInterval(
   }
 
   if (
-    (normalizedPlanName.includes("half") &&
-      normalizedPlanName.includes("year")) ||
-    normalizedPlanName.includes("semi-annual") ||
-    normalizedPlanName.includes("semi annual")
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "halfyear",
+      "half-year",
+      "half yearly",
+      "half-yearly",
+      "semi-annual",
+      "semi annual",
+      "semiannual",
+    ])
   ) {
     return {
       autoGenerate: true,
@@ -115,8 +160,11 @@ export function resolveBillingPlanInterval(
   }
 
   if (
-    normalizedPlanName.includes("year") ||
-    normalizedPlanName.includes("annual")
+    matchesPlanVariant(normalizedPlanName, normalizedPlanKey, [
+      "year",
+      "yearly",
+      "annual",
+    ])
   ) {
     return {
       autoGenerate: true,
