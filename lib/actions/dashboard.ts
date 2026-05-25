@@ -237,8 +237,12 @@ function getPaymentDate(
     | "collectedAmount"
   >,
 ): Date | null {
-  if (hasRecordedPayment(cycle)) {
-    return cycle.paymentReceivedDate ?? null;
+  if (cycle.paymentReceivedDate) {
+    return cycle.paymentReceivedDate;
+  }
+
+  if (cycle.paymentReceived === PaymentReceived.YES) {
+    return cycle.invoiceDate ?? cycle.billingSubmittedDate ?? null;
   }
 
   return null;
