@@ -28,6 +28,7 @@ type GroupedRevenueDetail = {
   companyId: string | null;
   companyName: string;
   poNumber: string;
+  scope: string;
   amount: number;
   collectedAmount: number;
   overdueAmount: number;
@@ -76,6 +77,7 @@ export type RevenueMonthDetail = {
   companyName: string;
   customerName: string;
   poNumber: string;
+  scope: string;
   invoiceNumber: string;
   billedAmount: number;
   paymentReceived: number;
@@ -97,31 +99,78 @@ const MONTHS = [
   "Mar",
 ];
 
+const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+const BUSINESS_TIME_ZONE_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function getBusinessDateParts(date: Date) {
+  const parts = businessDateFormatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+
+  return {
+    year,
+    monthIndex: month - 1,
+    day,
+  };
+}
+
+function createBusinessDate(
+  year: number,
+  monthIndex: number,
+  day: number,
+  endOfDay = false,
+) {
+  return new Date(
+    Date.UTC(
+      year,
+      monthIndex,
+      day,
+      endOfDay ? 23 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 999 : 0,
+    ) - BUSINESS_TIME_ZONE_OFFSET_MS,
+  );
+}
+
 function normalizeDate(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
+  const { year, monthIndex, day } = getBusinessDateParts(date);
+  return createBusinessDate(year, monthIndex, day);
+}
+
+function normalizeEndOfDate(date: Date) {
+  const { year, monthIndex, day } = getBusinessDateParts(date);
+  return createBusinessDate(year, monthIndex, day, true);
 }
 
 function getCurrentFinancialYear(date = new Date()) {
-  return date.getMonth() < 3 ? date.getFullYear() - 1 : date.getFullYear();
+  const { year, monthIndex } = getBusinessDateParts(date);
+  return monthIndex < 3 ? year - 1 : year;
 }
 
 function getFinancialYearRange(year: number) {
-  const start = new Date(year, 3, 1);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(year + 1, 2, 31, 23, 59, 59, 999);
+  const start = createBusinessDate(year, 3, 1);
+  const end = createBusinessDate(year + 1, 2, 31, true);
 
   return { start, end };
 }
 
 function getFinancialMonth(date: Date) {
-  return (date.getMonth() + 9) % 12;
+  const { monthIndex } = getBusinessDateParts(date);
+  return (monthIndex + 9) % 12;
 }
 
 function getFinancialYearForDate(date: Date) {
-  return date.getMonth() < 3 ? date.getFullYear() - 1 : date.getFullYear();
+  const { year, monthIndex } = getBusinessDateParts(date);
+  return monthIndex < 3 ? year - 1 : year;
 }
 
 function formatFinancialYearLabel(year: number) {
@@ -133,11 +182,17 @@ function getFinancialMonthRange(financialYear: number, monthIndex: number) {
 
   const calendarYear = monthIndex <= 8 ? financialYear : financialYear + 1;
 
-  const start = new Date(calendarYear, calendarMonth, 1);
+  const lastDayOfMonth = new Date(
+    Date.UTC(calendarYear, calendarMonth + 1, 0),
+  ).getUTCDate();
 
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(calendarYear, calendarMonth + 1, 0, 23, 59, 59, 999);
+  const start = createBusinessDate(calendarYear, calendarMonth, 1);
+  const end = createBusinessDate(
+    calendarYear,
+    calendarMonth,
+    lastDayOfMonth,
+    true,
+  );
 
   return {
     start,
@@ -171,18 +226,27 @@ function getPaymentDate(
     | "paymentReceivedDate"
     | "invoiceDate"
     | "billingSubmittedDate"
+    | "collectedAmount"
   >,
 ): Date | null {
-  if (cycle.paymentReceived === PaymentReceived.YES) {
-    return (
-      cycle.paymentReceivedDate ??
-      cycle.invoiceDate ??
-      cycle.billingSubmittedDate ??
-      null
-    );
+  if (hasRecordedPayment(cycle)) {
+    return cycle.paymentReceivedDate ?? null;
   }
 
   return null;
+}
+
+function hasRecordedPayment(
+  cycle: Pick<
+    BillingCycleWithPurchaseOrder,
+    "paymentReceived" | "paymentReceivedDate" | "collectedAmount"
+  >,
+) {
+  return (
+    cycle.paymentReceived === PaymentReceived.YES ||
+    Boolean(cycle.paymentReceivedDate) ||
+    Number(cycle.collectedAmount || 0) > 0
+  );
 }
 
 /**
@@ -234,9 +298,7 @@ function isWithinFilterDateRange(date: Date, filters?: BillingStatusFilters) {
   }
 
   if (filters?.endDate) {
-    const endDate = new Date(filters.endDate);
-
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = normalizeEndOfDate(new Date(filters.endDate));
 
     if (date > endDate) {
       return false;
@@ -394,7 +456,7 @@ export async function getMonthlyBillingData(
         }
       }
     }
-    if (cycle.paymentReceived === PaymentReceived.YES) {
+    if (hasRecordedPayment(cycle)) {
       const paymentDate = getPaymentDate(cycle);
 
       if (paymentDate && collected > 0) {
@@ -587,6 +649,7 @@ export async function getBillingStatusDetails(
       companyId: cycle.purchaseOrder?.company?.id || null,
       companyName: cycle.purchaseOrder?.company?.name || "-",
       poNumber: cycle.purchaseOrder?.customerPONumber || "-",
+      scope: cycle.purchaseOrder?.scope?.trim() || "-",
       amount: billed,
       collectedAmount: collected,
       overdueAmount: overdue,
@@ -665,10 +728,7 @@ export async function getRevenueDetailsByMonth(
         return false;
       }
 
-      if (
-        params.series === "payment" &&
-        cycle.paymentReceived !== PaymentReceived.YES
-      ) {
+      if (params.series === "payment" && !hasRecordedPayment(cycle)) {
         return false;
       }
 
@@ -698,6 +758,8 @@ export async function getRevenueDetailsByMonth(
         customerName: getCustomerDisplayName(cycle.purchaseOrder?.customer),
 
         poNumber: cycle.purchaseOrder?.customerPONumber || "-",
+
+        scope: cycle.purchaseOrder?.scope?.trim() || "-",
 
         invoiceNumber: cycle.invoiceNumber || "-",
 

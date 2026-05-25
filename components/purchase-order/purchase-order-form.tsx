@@ -238,6 +238,24 @@ const createBillingCycleDraft = ({
 const getDateFromMonthYear = (month: number, year: number) =>
   new Date(year, month, 1);
 
+const distributeInvoiceAmounts = (
+  totalAmount: number | string | null | undefined,
+  cycleCount: number,
+) => {
+  if (cycleCount <= 0) return [];
+
+  const totalInPaise = Math.round(Number(totalAmount ?? 0) * 100);
+  const baseAmountInPaise = Math.floor(totalInPaise / cycleCount);
+  const remainderInPaise = totalInPaise % cycleCount;
+
+  return Array.from({ length: cycleCount }, (_, index) => {
+    const nextAmountInPaise =
+      baseAmountInPaise + (index < remainderInPaise ? 1 : 0);
+
+    return nextAmountInPaise / 100;
+  });
+};
+
 const isOTSContractType = (name?: string | null) => {
   const normalizedName = name?.trim().toLowerCase() ?? "";
 
@@ -586,13 +604,13 @@ const POForm = ({
       planName: selectedPlan.name,
       type: selectedPlan.billingCycleType ?? "START",
     });
-    const perCycleAmount =
-      generatedCycles.length > 0
-        ? Math.round((Number(watchPOAmount) / generatedCycles.length) * 100) / 100
-        : 0;
+    const generatedInvoiceAmounts = distributeInvoiceAmounts(
+      watchPOAmount,
+      generatedCycles.length,
+    );
     const existingCycles = form.getValues("billingCycles") ?? [];
 
-    const cycles = generatedCycles.map((cycleDates) => {
+    const cycles = generatedCycles.map((cycleDates, index) => {
       const targetDate = cycleDates.invoiceDate ?? cycleDates.billingSubmittedDate;
       const targetMonth = targetDate.getMonth();
       const targetYear = targetDate.getFullYear();
@@ -608,7 +626,7 @@ const POForm = ({
       return {
         id: existingCycle?.id,
         invoiceNumber: existingCycle?.invoiceNumber ?? "",
-        invoiceAmount: Number(existingCycle?.invoiceAmount ?? perCycleAmount),
+        invoiceAmount: Number(generatedInvoiceAmounts[index] ?? 0),
         collectedAmount: Number(existingCycle?.collectedAmount ?? 0),
         invoiceDate: existingCycle?.invoiceDate ?? cycleDates.invoiceDate,
         billingSubmittedDate:

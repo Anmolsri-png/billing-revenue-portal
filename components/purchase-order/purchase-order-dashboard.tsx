@@ -54,6 +54,7 @@ type RevenueDetail = {
   customerName?: string | null;
   companyName?: string | null;
   poNumber?: string | null;
+  scope?: string | null;
   amount?: number | string | null;
   collectedAmount?: number | string | null;
   overdueAmount?: number | string | null;
@@ -734,7 +735,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
             </div>
 
             <div className="overflow-x-auto revenue-scroll">
-              <table className="min-w-[1400px] w-full">
+              <table className="min-w-[1560px] w-full">
                 <thead className="bg-slate-50">
                   <tr className="border-b border-slate-100">
                     {[
@@ -742,6 +743,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
                       "Customer",
                       "Company",
                       "PO Number",
+                      "Scope of Work",
                       "Billed Amount",
                       "Amount Received",
                       "Amount Pending",
@@ -764,7 +766,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
                   {revenueDetails.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         className="px-5 py-14 text-center text-sm font-medium text-slate-400"
                       >
                         {loading
@@ -798,6 +800,11 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
                           </td>
                           <td className="px-5 py-4 text-sm font-semibold text-slate-950">
                             {item.poNumber || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-slate-600">
+                            <div className="max-w-[280px] whitespace-normal break-words">
+                              {item.scope || "-"}
+                            </div>
                           </td>
                           <td className="px-5 py-4 font-mono text-sm text-slate-700 tabular-nums">
                             {formatCurrency(item.amount)}

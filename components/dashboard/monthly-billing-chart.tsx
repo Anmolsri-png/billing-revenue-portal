@@ -925,7 +925,7 @@ export function MonthlyBillingChartCard({
           </div>
 
           <div className="overflow-x-auto revenue-scroll">
-            <table className="min-w-[1220px] w-full">
+            <table className="min-w-[1420px] w-full">
               <thead className="bg-slate-50">
                 <tr className="border-b border-slate-100">
                   {[
@@ -934,6 +934,7 @@ export function MonthlyBillingChartCard({
                     "Customer",
                     "Company",
                     "PO Number",
+                    "Scope of Work",
                     "Invoice Number",
                     "Bill Generated",
                     "Payment Received",
@@ -953,7 +954,7 @@ export function MonthlyBillingChartCard({
                 {detailLoading ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-5 py-12 text-center text-sm font-medium text-slate-400"
                     >
                       Loading {chartConfig[selectedMonth.series].label.toLowerCase()} details...
@@ -962,7 +963,7 @@ export function MonthlyBillingChartCard({
                 ) : details.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-5 py-12 text-center text-sm font-medium text-slate-400"
                     >
                       No records found for {selectedMonth.label}.
@@ -990,6 +991,11 @@ export function MonthlyBillingChartCard({
                         {item.poNumber}
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-600">
+                        <div className="max-w-[260px] whitespace-normal break-words">
+                          {item.scope}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-slate-600">
                         {item.invoiceNumber}
                       </td>
                       <td className="px-5 py-4 font-mono text-sm text-slate-700 tabular-nums">
@@ -1012,4 +1018,3 @@ export function MonthlyBillingChartCard({
     </div>
   );
 }
-
