@@ -264,11 +264,6 @@ function hasRecordedPayment(
   );
 }
 
-/**
- * IMPORTANT:
- * If status YES but collectedAmount missing,
- * use invoiceAmount as fallback.
- */
 function getEffectiveCollectedAmount(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
