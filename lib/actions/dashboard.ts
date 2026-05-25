@@ -99,82 +99,65 @@ const MONTHS = [
   "Mar",
 ];
 
-const BUSINESS_TIME_ZONE = "Asia/Kolkata";
-const BUSINESS_TIME_ZONE_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-
-const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BUSINESS_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function getBusinessDateParts(date: Date) {
-  const parts = businessDateFormatter.formatToParts(date);
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const day = Number(parts.find((part) => part.type === "day")?.value);
-
-  return {
-    year,
-    monthIndex: month - 1,
-    day,
-  };
-}
-
 function createBusinessDate(
   year: number,
   monthIndex: number,
   day: number,
   endOfDay = false,
 ) {
-  return new Date(
-    Date.UTC(
-      year,
-      monthIndex,
-      day,
-      endOfDay ? 23 : 0,
-      endOfDay ? 59 : 0,
-      endOfDay ? 59 : 0,
-      endOfDay ? 999 : 0,
-    ) - BUSINESS_TIME_ZONE_OFFSET_MS,
-  );
+  const date = new Date(year, monthIndex, day);
+  if (endOfDay) {
+    date.setHours(23, 59, 59, 999);
+  } else {
+    date.setHours(0, 0, 0, 0);
+  }
+  return date;
 }
 
 function normalizeDate(date: Date) {
-  const { year, monthIndex, day } = getBusinessDateParts(date);
-  return createBusinessDate(year, monthIndex, day);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function normalizeEndOfDate(date: Date) {
-  const { year, monthIndex, day } = getBusinessDateParts(date);
-  return createBusinessDate(year, monthIndex, day, true);
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
 }
 
 function getCurrentFinancialYear(date = new Date()) {
-  const { year, monthIndex } = getBusinessDateParts(date);
-  return monthIndex < 3 ? year - 1 : year;
+  const d = new Date(date);
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  return month < 3 ? year - 1 : year;
 }
 
 function getFinancialYearRange(year: number) {
-  const start = createBusinessDate(year, 3, 1);
-  const end = createBusinessDate(year + 1, 2, 31, true);
+  const start = new Date(year, 3, 1);
+  start.setHours(0, 0, 0, 0);
+  
+  const end = new Date(year + 1, 2, 31);
+  end.setHours(23, 59, 59, 999);
 
   return { start, end };
 }
 
 function getFinancialMonth(date: Date) {
-  const { monthIndex } = getBusinessDateParts(date);
+  const d = new Date(date);
+  const monthIndex = d.getMonth();
   return (monthIndex + 9) % 12;
 }
 
 function getFinancialYearForDate(date: Date) {
-  const { year, monthIndex } = getBusinessDateParts(date);
+  const d = new Date(date);
+  const monthIndex = d.getMonth();
+  const year = d.getFullYear();
   return monthIndex < 3 ? year - 1 : year;
 }
 
 function getBusinessCalendarYear(date: Date) {
-  return getBusinessDateParts(date).year;
+  return new Date(date).getFullYear();
 }
 
 function getBusinessMonthLabel(date: Date) {
@@ -532,7 +515,7 @@ export async function getDueForBillingAmount(
   });
 
   let totalDueForBilling = 0;
-
+  
   for (const cycle of cycles) {
     const dueForBillingDate = getDueForBillingDate(cycle);
 

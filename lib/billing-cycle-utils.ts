@@ -335,16 +335,27 @@ export function generatePurchaseOrderBillingCycles({
   planName?: string | null;
   type: BillingCycleType | "START" | "MID" | "END";
 }) {
+  const planInterval = resolveBillingPlanInterval(totalBillingCycles, planName);
+
   return generateBillingCycleSchedule({
     startDate,
     endDate,
     totalBillingCycles,
     planName,
     type,
-  }).map((cycle) => ({
-    invoiceDate: cycle.scheduledDate,
-    billingSubmittedDate: undefined,
-  }));
+  }).map((cycle) => {
+    const cycleDates = planInterval.singleCycle
+      ? {
+          invoiceDate: cycle.scheduledDate,
+          billingSubmittedDate: undefined,
+        }
+      : getPurchaseOrderCycleDates(cycle.scheduledDate, type);
+
+    return {
+      invoiceDate: cycleDates.invoiceDate,
+      billingSubmittedDate: cycleDates.billingSubmittedDate,
+    };
+  });
 }
 
 export function generateProjectBillingCycles({
