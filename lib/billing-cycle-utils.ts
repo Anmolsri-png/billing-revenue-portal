@@ -161,6 +161,25 @@ export function resolveBillingPlanInterval(
   };
 }
 
+// function getBillingCycleOffsets(
+//   startDate: Date,
+//   endDate: Date | null | undefined,
+//   intervalMonths: number,
+//   singleCycle: boolean,
+// ) {
+//   if (singleCycle) return [0];
+
+//   const totalMonths = getMonthSpan(startDate, endDate);
+//   const safeIntervalMonths = Math.max(1, Math.floor(intervalMonths || 1));
+//   const offsets: number[] = [];
+
+//   for (let offset = 0; offset < totalMonths; offset += safeIntervalMonths) {
+//     offsets.push(offset);
+//   }
+
+//   return offsets;
+// }
+
 function getBillingCycleOffsets(
   startDate: Date,
   endDate: Date | null | undefined,
@@ -173,8 +192,10 @@ function getBillingCycleOffsets(
   const safeIntervalMonths = Math.max(1, Math.floor(intervalMonths || 1));
   const offsets: number[] = [];
 
-  for (let offset = 0; offset < totalMonths; offset += safeIntervalMonths) {
-    offsets.push(offset);
+  const cycles = Math.ceil(totalMonths / safeIntervalMonths);
+
+  for (let i = 0; i < cycles; i++) {
+    offsets.push(i * safeIntervalMonths);
   }
 
   return offsets;
