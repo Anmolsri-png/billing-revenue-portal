@@ -173,6 +173,14 @@ function getFinancialYearForDate(date: Date) {
   return monthIndex < 3 ? year - 1 : year;
 }
 
+function getBusinessCalendarYear(date: Date) {
+  return getBusinessDateParts(date).year;
+}
+
+function getBusinessMonthLabel(date: Date) {
+  return MONTHS[getFinancialMonth(date)];
+}
+
 function formatFinancialYearLabel(year: number) {
   return `FY ${year}-${String(year + 1).slice(-2)}`;
 }
@@ -749,9 +757,9 @@ export async function getRevenueDetailsByMonth(
       return {
         id: cycle.id,
 
-        month: format(seriesDate || new Date(), "MMM"),
+        month: getBusinessMonthLabel(seriesDate || new Date()),
 
-        year: new Date(seriesDate || new Date()).getFullYear(),
+        year: getBusinessCalendarYear(seriesDate || new Date()),
 
         companyName: cycle.purchaseOrder?.company?.name || "-",
 
