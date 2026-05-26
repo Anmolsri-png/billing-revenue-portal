@@ -15,6 +15,15 @@ export interface DashboardStats {
   currentMonth: string;
 }
 
+export interface RevenueDashboardSummary {
+  totalRevenueProjected: number;
+  totalRevenueTillNow: number;
+  dueForBillingTillNow: number;
+  collectedAmountTillNow: number;
+  pendingCollectionTillNow: number;
+  collectionEfficiency: number;
+}
+
 interface BillingStatusFilters {
   company?: string;
   startDate?: Date;
@@ -126,6 +135,10 @@ function normalizeEndOfDate(date: Date) {
   return d;
 }
 
+function getEarlierDate(left: Date, right: Date) {
+  return left.getTime() <= right.getTime() ? left : right;
+}
+
 function getCurrentFinancialYear(date = new Date()) {
   const d = new Date(date);
   const month = d.getMonth();
@@ -166,6 +179,27 @@ function getBusinessMonthLabel(date: Date) {
 
 function formatFinancialYearLabel(year: number) {
   return `FY ${year}-${String(year + 1).slice(-2)}`;
+}
+
+function getSummaryAsOfDate(
+  year?: number,
+  filters?: BillingStatusFilters,
+  referenceDate = new Date(),
+) {
+  let asOfDate = normalizeEndOfDate(referenceDate);
+
+  if (typeof year === "number") {
+    asOfDate = getEarlierDate(asOfDate, getFinancialYearRange(year).end);
+  }
+
+  if (filters?.endDate) {
+    asOfDate = getEarlierDate(
+      asOfDate,
+      normalizeEndOfDate(new Date(filters.endDate)),
+    );
+  }
+
+  return asOfDate;
 }
 
 function getFinancialMonthRange(financialYear: number, monthIndex: number) {
@@ -484,6 +518,134 @@ export async function getMonthlyBillingData(
   return data;
 }
 
+export async function getRevenueDashboardSummary(
+  year?: number,
+  filters?: BillingStatusFilters,
+): Promise<RevenueDashboardSummary> {
+  const cycles = await prisma.billingCycle.findMany({
+    where: {
+      ...(filters?.company &&
+        filters.company !== "all" && {
+          purchaseOrder: {
+            companyId: filters.company,
+          },
+        }),
+    },
+    select: {
+      billingSubmittedDate: true,
+      paymentReceived: true,
+      paymentReceivedDate: true,
+      paymentDueDate: true,
+      collectedAmount: true,
+      invoiceAmount: true,
+      invoiceDate: true,
+      invoiceNumber: true,
+    },
+  });
+
+  const asOfDate = getSummaryAsOfDate(year, filters);
+
+  let totalRevenueProjected = 0;
+  let totalRevenueTillNow = 0;
+  let dueForBillingTillNow = 0;
+  let collectedAmountTillNow = 0;
+  let pendingCollectionTillNow = 0;
+
+  for (const cycle of cycles) {
+    const invoiceDate = getInvoiceDate(cycle);
+
+    if (invoiceDate) {
+      const normalizedInvoiceDate = normalizeDate(invoiceDate);
+      let matchesInvoiceSelection = true;
+
+      if (typeof year === "number") {
+        const fyRange = getFinancialYearRange(year);
+
+        if (
+          normalizedInvoiceDate < fyRange.start ||
+          normalizedInvoiceDate > fyRange.end
+        ) {
+          matchesInvoiceSelection = false;
+        }
+      }
+
+      if (
+        matchesInvoiceSelection &&
+        isWithinFilterDateRange(normalizedInvoiceDate, filters) &&
+        matchesFilterMonth(normalizedInvoiceDate, filters)
+      ) {
+        const billedAmount = Number(cycle.invoiceAmount || 0);
+
+        totalRevenueProjected += billedAmount;
+
+        if (normalizedInvoiceDate <= asOfDate) {
+          totalRevenueTillNow += billedAmount;
+
+          const paymentDate = getPaymentDate(cycle);
+          const effectiveCollectedAmount = getEffectiveCollectedAmount(cycle);
+          const collectedTillNow =
+            paymentDate && normalizeDate(paymentDate) <= asOfDate
+              ? effectiveCollectedAmount
+              : 0;
+
+          collectedAmountTillNow += collectedTillNow;
+          pendingCollectionTillNow += Math.max(
+            billedAmount - collectedTillNow,
+            0,
+          );
+        }
+      }
+    }
+
+    const dueForBillingDate = getDueForBillingDate(cycle);
+
+    if (!dueForBillingDate || cycle.invoiceNumber?.trim()) {
+      continue;
+    }
+
+    const normalizedBillingDate = normalizeDate(dueForBillingDate);
+
+    if (typeof year === "number") {
+      const fyRange = getFinancialYearRange(year);
+
+      if (
+        normalizedBillingDate < fyRange.start ||
+        normalizedBillingDate > fyRange.end
+      ) {
+        continue;
+      }
+    }
+
+    if (!isWithinFilterDateRange(normalizedBillingDate, filters)) {
+      continue;
+    }
+
+    if (!matchesFilterMonth(normalizedBillingDate, filters)) {
+      continue;
+    }
+
+    if (normalizedBillingDate > asOfDate) {
+      continue;
+    }
+
+    dueForBillingTillNow += Number(cycle.invoiceAmount || 0);
+  }
+
+  return {
+    totalRevenueProjected,
+    totalRevenueTillNow,
+    dueForBillingTillNow,
+    collectedAmountTillNow,
+    pendingCollectionTillNow,
+    collectionEfficiency:
+      totalRevenueTillNow > 0
+        ? Number(
+            ((collectedAmountTillNow / totalRevenueTillNow) * 100).toFixed(2),
+          )
+        : 0,
+  };
+}
+
 export async function getDueForBillingAmount(
   year?: number,
   filters?: BillingStatusFilters,
@@ -515,6 +677,7 @@ export async function getDueForBillingAmount(
   });
 
   let totalDueForBilling = 0;
+  const asOfDate = getSummaryAsOfDate(year, filters);
   
   for (const cycle of cycles) {
     const dueForBillingDate = getDueForBillingDate(cycle);
@@ -549,6 +712,10 @@ export async function getDueForBillingAmount(
     }
 
     if (!matchesFilterMonth(normalizedBillingDate, filters)) {
+      continue;
+    }
+
+    if (normalizedBillingDate > asOfDate) {
       continue;
     }
 
@@ -609,7 +776,7 @@ export async function getBillingStatusDetails(
 
     const billed = Number(cycle.invoiceAmount || 0);
     const collected = getEffectiveCollectedAmount(cycle);
-    const overdue = Math.max(billed - collected, 0);
+    const pendingAmount = Math.max(billed - collected, 0);
     const financialYear = getFinancialYearForDate(normalizedDate);
     const financialMonth = getFinancialMonth(normalizedDate);
     const shouldSplitByMonth =
@@ -632,7 +799,7 @@ export async function getBillingStatusDetails(
     if (existing) {
       existing.amount += billed;
       existing.collectedAmount += collected;
-      existing.overdueAmount += overdue;
+      existing.overdueAmount += pendingAmount;
       continue;
     }
 
@@ -645,7 +812,7 @@ export async function getBillingStatusDetails(
       scope: cycle.purchaseOrder?.scope?.trim() || "-",
       amount: billed,
       collectedAmount: collected,
-      overdueAmount: overdue,
+      overdueAmount: pendingAmount,
       serviceType: cycle.purchaseOrder?.ServiceType?.name || "-",
       billingPlan: cycle.purchaseOrder?.billingPlan?.name || "-",
       contractDuration,

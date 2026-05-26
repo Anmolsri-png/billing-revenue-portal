@@ -17,8 +17,8 @@ import {
 
 import {
   getBillingStatusDetails,
-  getDueForBillingAmount,
-  getMonthlyBillingData,
+  getRevenueDashboardSummary,
+  type RevenueDashboardSummary,
 } from "@/lib/actions/dashboard";
 import { cn } from "@/lib/utils";
 
@@ -112,7 +112,7 @@ function formatCurrency(value: number | string | null | undefined) {
 
 function formatNumber(value: number | string | null | undefined) {
   return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(Number(value || 0));
 }
 
@@ -280,8 +280,14 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filters, setFilters] = useState<Filters>(getDefaultFilters);
   const [revenueDetails, setRevenueDetails] = useState<RevenueDetail[]>([]);
-  const [currentRevenueTotal, setCurrentRevenueTotal] = useState(0);
-  const [dueForBillingTotal, setDueForBillingTotal] = useState(0);
+  const [summary, setSummary] = useState<RevenueDashboardSummary>({
+    totalRevenueProjected: 0,
+    totalRevenueTillNow: 0,
+    dueForBillingTillNow: 0,
+    collectedAmountTillNow: 0,
+    pendingCollectionTillNow: 0,
+    collectionEfficiency: 0,
+  });
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
@@ -305,25 +311,15 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
       try {
         const selectedYear =
           filters.year === "all" ? undefined : Number(filters.year);
-        const billingYearForCurrentTotal =
-          filters.year === "all" ? currentFY : Number(filters.year);
-        const [data, monthlyBillingData, dueForBillingAmount] =
-          await Promise.all([
-            getBillingStatusDetails(selectedYear, filters),
-            getMonthlyBillingData(billingYearForCurrentTotal, filters),
-            getDueForBillingAmount(selectedYear, filters),
-          ]);
+        const [data, dashboardSummary] = await Promise.all([
+          getBillingStatusDetails(selectedYear, filters),
+          getRevenueDashboardSummary(selectedYear, filters),
+        ]);
 
         if (!active) return;
 
         setRevenueDetails(data ?? []);
-        setCurrentRevenueTotal(
-          (monthlyBillingData ?? []).reduce(
-            (sum, item) => sum + Number(item.billing || 0),
-            0,
-          ),
-        );
-        setDueForBillingTotal(dueForBillingAmount);
+        setSummary(dashboardSummary);
         setLastUpdated(new Date());
       } finally {
         if (active) {
@@ -369,15 +365,6 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
     },
   );
 
-  const collectionEfficiency =
-    filteredStats.totalBilledAmount > 0
-      ? Math.round(
-          (filteredStats.totalCollectedAmount /
-            filteredStats.totalBilledAmount) *
-            100,
-        )
-      : 0;
-
   const activeFilterCount = [
     filters.company !== "all",
     filters.month !== "all",
@@ -392,14 +379,14 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
     {
       label: "Total Revenue Projected",
       description: "Combined billed revenue across the current selection",
-      value: formatCurrency(filteredStats.totalBilledAmount),
+      value: formatCurrency(summary.totalRevenueProjected),
       icon: IndianRupee,
       tone: "bg-violet-500",
     },
     {
       label: "Total Revenue Till Now",
       description: "Billed revenue recorded till the current financial month",
-      value: formatCurrency(currentRevenueTotal),
+      value: formatCurrency(summary.totalRevenueTillNow),
       icon: IndianRupee,
       tone: "bg-sky-500",
     },
@@ -407,28 +394,28 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
       label: "Due for Billing Till Now",
       description:
         "Billing amount pending invoice generation after the billing date",
-      value: formatCurrency(dueForBillingTotal),
+      value: formatCurrency(summary.dueForBillingTillNow),
       icon: CalendarIcon,
       tone: "bg-amber-500",
     },
     {
       label: "Collected Amount Till Now",
       description: "Payments already received for billed revenue",
-      value: formatCurrency(filteredStats.totalCollectedAmount),
+      value: formatCurrency(summary.collectedAmountTillNow),
       icon: TrendingUp,
       tone: "bg-emerald-500",
     },
     {
       label: "Due For Collection Till Now",
       description: "Outstanding amount still pending collection",
-      value: formatCurrency(filteredStats.totalOverdueAmount),
+      value: formatCurrency(summary.pendingCollectionTillNow),
       icon: TrendingDown,
       tone: "bg-rose-500",
     },
     {
       label: "Collection Efficiency",
       description: "Collected share of the billed amount",
-      value: formatNumber(collectionEfficiency),
+      value: formatNumber(summary.collectionEfficiency),
       suffix: "%",
       icon: Layers3,
       tone: "bg-cyan-500",
@@ -729,7 +716,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-rose-700">
                   <span className="h-2 w-2 rounded-full bg-rose-400" />
-                  {formatCurrency(filteredStats.totalOverdueAmount)} overdue
+                  {formatCurrency(filteredStats.totalOverdueAmount)} pending
                 </span>
               </div>
             </div>
