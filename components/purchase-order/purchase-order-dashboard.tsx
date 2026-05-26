@@ -37,6 +37,7 @@ import {
 
 type Filters = {
   company: string;
+  customer: string;
   startDate?: Date;
   endDate?: Date;
   month: string;
@@ -44,6 +45,11 @@ type Filters = {
 };
 
 type CompanyOption = {
+  id: string;
+  name: string;
+};
+
+type CustomerOption = {
   id: string;
   name: string;
 };
@@ -66,6 +72,7 @@ type RevenueDetail = {
 
 type PurchaseOrderDashboardProps = {
   companies: CompanyOption[];
+  customers: CustomerOption[];
 };
 
 const financialYearMonths = [
@@ -95,6 +102,7 @@ const years = Array.from(
 function getDefaultFilters(): Filters {
   return {
     company: "all",
+    customer: "all",
     startDate: undefined,
     endDate: undefined,
     month: "all",
@@ -145,6 +153,10 @@ function getActiveFilterSummary(filters: Filters) {
 
   if (filters.company !== "all") {
     parts.push("Company filter");
+  }
+
+  if (filters.customer !== "all") {
+    parts.push("Customer filter");
   }
 
   return parts.join(" / ");
@@ -268,7 +280,10 @@ function MetricCard({
   );
 }
 
-const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
+const PurchaseOrderDashboard = ({
+  companies,
+  customers,
+}: PurchaseOrderDashboardProps) => {
   const hydrated = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -367,6 +382,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
 
   const activeFilterCount = [
     filters.company !== "all",
+    filters.customer !== "all",
     filters.month !== "all",
     filters.year !== currentFY.toString(),
     Boolean(filters.startDate),
@@ -495,7 +511,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
               <div>
                 <p className="text-sm font-semibold text-slate-900">Filters</p>
                 <p className="text-xs text-slate-500">
-                  Refine by company, date, month, and year
+                  Refine by company, customer, date, month, and year
                 </p>
               </div>
 
@@ -516,7 +532,7 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
 
           {filtersOpen ? (
             <div className="border-t border-slate-100 px-6 py-6 sm:px-7">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 2xl:items-end">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7 2xl:items-end">
                 <div className="min-w-0 space-y-2">
                   <Label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                     Company
@@ -533,6 +549,28 @@ const PurchaseOrderDashboard = ({ companies }: PurchaseOrderDashboardProps) => {
                       {companies.map((company) => (
                         <SelectItem key={company.id} value={String(company.id)}>
                           {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <Label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    Customer
+                  </Label>
+                  <Select
+                    value={filters.customer}
+                    onValueChange={(value) => updateFilter("customer", value)}
+                  >
+                    <SelectTrigger className="h-10 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50 text-sm">
+                      <SelectValue placeholder="All Customers" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl">
+                      <SelectItem value="all">All Customers</SelectItem>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.id} value={String(customer.id)}>
+                          {customer.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

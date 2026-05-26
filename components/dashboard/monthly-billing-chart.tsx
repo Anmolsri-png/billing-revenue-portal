@@ -47,6 +47,7 @@ type ChartData = {
 
 type Filters = {
   company: string;
+  customer: string;
   startDate?: Date;
   endDate?: Date;
   month: string;
@@ -749,6 +750,7 @@ export function MonthlyBillingChartCard({
           selectedYear,
           {
             company: filters.company,
+            customer: filters.customer,
             endDate: filters.endDate,
             month: filters.month,
             startDate: filters.startDate,
@@ -804,6 +806,7 @@ export function MonthlyBillingChartCard({
     };
   }, [
     filters.company,
+    filters.customer,
     filters.endDate,
     filters.month,
     filters.startDate,
@@ -815,6 +818,7 @@ export function MonthlyBillingChartCard({
     setDetails([]);
   }, [
     filters.company,
+    filters.customer,
     filters.endDate,
     filters.month,
     filters.startDate,
@@ -839,6 +843,7 @@ export function MonthlyBillingChartCard({
           },
           {
             company: filters.company,
+            customer: filters.customer,
             endDate: filters.endDate,
             month: filters.month,
             startDate: filters.startDate,
@@ -862,6 +867,7 @@ export function MonthlyBillingChartCard({
     };
   }, [
     filters.company,
+    filters.customer,
     filters.endDate,
     filters.month,
     filters.startDate,

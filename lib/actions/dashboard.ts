@@ -26,6 +26,7 @@ export interface RevenueDashboardSummary {
 
 interface BillingStatusFilters {
   company?: string;
+  customer?: string;
   startDate?: Date;
   endDate?: Date;
   month?: string;
@@ -73,6 +74,9 @@ type BillingCycleWithPurchaseOrder = Prisma.BillingCycleGetPayload<{
 type CustomerRecord = BillingCycleWithPurchaseOrder["purchaseOrder"]["customer"];
 type CompanyFilterCycle = {
   purchaseOrder?: {
+    customer?: {
+      id?: string | null;
+    } | null;
     company?: {
       id?: string | null;
     } | null;
@@ -307,6 +311,36 @@ function matchesCompanyFilter(
   return String(cycle.purchaseOrder?.company?.id) === filters.company;
 }
 
+function matchesCustomerFilter(
+  cycle: CompanyFilterCycle,
+  filters?: BillingStatusFilters,
+) {
+  if (!filters?.customer || filters.customer === "all") {
+    return true;
+  }
+
+  return String(cycle.purchaseOrder?.customer?.id) === filters.customer;
+}
+
+function getPurchaseOrderFilter(filters?: BillingStatusFilters) {
+  const purchaseOrderFilter: {
+    companyId?: string;
+    customerId?: string;
+  } = {};
+
+  if (filters?.company && filters.company !== "all") {
+    purchaseOrderFilter.companyId = filters.company;
+  }
+
+  if (filters?.customer && filters.customer !== "all") {
+    purchaseOrderFilter.customerId = filters.customer;
+  }
+
+  return Object.keys(purchaseOrderFilter).length > 0
+    ? purchaseOrderFilter
+    : undefined;
+}
+
 function matchesFilterMonth(date: Date, filters?: BillingStatusFilters) {
   if (!filters?.month || filters.month === "all") {
     return true;
@@ -429,15 +463,13 @@ export async function getMonthlyBillingData(
   const currentFYMonth = getFinancialMonth(currentDate);
 
   const today = normalizeDate(new Date());
+  const purchaseOrderFilter = getPurchaseOrderFilter(filters);
 
   const cycles = await prisma.billingCycle.findMany({
     where: {
-      ...(filters?.company &&
-        filters.company !== "all" && {
-          purchaseOrder: {
-            companyId: filters.company,
-          },
-        }),
+      ...(purchaseOrderFilter && {
+        purchaseOrder: purchaseOrderFilter,
+      }),
     },
   });
 
@@ -522,14 +554,13 @@ export async function getRevenueDashboardSummary(
   year?: number,
   filters?: BillingStatusFilters,
 ): Promise<RevenueDashboardSummary> {
+  const purchaseOrderFilter = getPurchaseOrderFilter(filters);
+
   const cycles = await prisma.billingCycle.findMany({
     where: {
-      ...(filters?.company &&
-        filters.company !== "all" && {
-          purchaseOrder: {
-            companyId: filters.company,
-          },
-        }),
+      ...(purchaseOrderFilter && {
+        purchaseOrder: purchaseOrderFilter,
+      }),
     },
     select: {
       billingSubmittedDate: true,
@@ -650,14 +681,13 @@ export async function getDueForBillingAmount(
   year?: number,
   filters?: BillingStatusFilters,
 ) {
+  const purchaseOrderFilter = getPurchaseOrderFilter(filters);
+
   const cycles = await prisma.billingCycle.findMany({
     where: {
-      ...(filters?.company &&
-        filters.company !== "all" && {
-          purchaseOrder: {
-            companyId: filters.company,
-          },
-        }),
+      ...(purchaseOrderFilter && {
+        purchaseOrder: purchaseOrderFilter,
+      }),
     },
     select: {
       billingSubmittedDate: true,
@@ -667,6 +697,11 @@ export async function getDueForBillingAmount(
       purchaseOrder: {
         select: {
           company: {
+            select: {
+              id: true,
+            },
+          },
+          customer: {
             select: {
               id: true,
             },
@@ -704,6 +739,10 @@ export async function getDueForBillingAmount(
     }
 
     if (!matchesCompanyFilter(cycle, filters)) {
+      continue;
+    }
+
+    if (!matchesCustomerFilter(cycle, filters)) {
       continue;
     }
 
@@ -763,6 +802,10 @@ export async function getBillingStatusDetails(
     }
 
     if (!matchesCompanyFilter(cycle, filters)) {
+      continue;
+    }
+
+    if (!matchesCustomerFilter(cycle, filters)) {
       continue;
     }
 
@@ -843,15 +886,13 @@ export async function getRevenueDetailsByMonth(
   filters?: BillingStatusFilters,
 ): Promise<RevenueMonthDetail[]> {
   const { start, end } = getFinancialMonthRange(params.year, params.month);
+  const purchaseOrderFilter = getPurchaseOrderFilter(filters);
 
   const cycles = await prisma.billingCycle.findMany({
     where: {
-      ...(filters?.company &&
-        filters.company !== "all" && {
-          purchaseOrder: {
-            companyId: filters.company,
-          },
-        }),
+      ...(purchaseOrderFilter && {
+        purchaseOrder: purchaseOrderFilter,
+      }),
     },
     include: {
       purchaseOrder: {
@@ -881,6 +922,10 @@ export async function getRevenueDetailsByMonth(
       }
 
       if (!matchesCompanyFilter(cycle, filters)) {
+        return false;
+      }
+
+      if (!matchesCustomerFilter(cycle, filters)) {
         return false;
       }
 
