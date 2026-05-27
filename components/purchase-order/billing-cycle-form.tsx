@@ -402,20 +402,27 @@ const BillingCycleForm = ({
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className={cn(
-                        dateButtonClassName(!!field.value),
-                        "cursor-not-allowed bg-slate-50/90 text-slate-600",
-                      )}
-                      >
+                      className={dateButtonClassName(!!field.value)}
+                    >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {field.value ? format(field.value, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    avoidCollisions={false}
+                    className="w-auto p-0"
+                    side="bottom"
+                    sideOffset={8}
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={field.value as Date}
+                      onSelect={field.onChange}
+                    />
+                  </PopoverContent>
                 </Popover>
               </FormControl>
-              {/* <p className="text-xs text-slate-500">
-                Billing submitted date follows the invoice date automatically.
-              </p> */}
               <FormMessage />
             </FormItem>
           )}
