@@ -208,6 +208,18 @@ const getDefaultPaymentDueDate = (
   );
 };
 
+const getBillingSubmittedDate = (
+  cycle?: Partial<PurchaseOrderBillingCycle> | null,
+  anchorDate?: Date | null,
+) => {
+  return (
+    cycle?.invoiceDate ??
+    cycle?.billingSubmittedDate ??
+    anchorDate ??
+    undefined
+  );
+};
+
 const createBillingCycleDraft = ({
   existingCycle,
   anchorDate,
@@ -225,8 +237,12 @@ const createBillingCycleDraft = ({
     ? Number(existingCycle?.invoiceAmount ?? invoiceAmount)
     : Number(invoiceAmount),
   collectedAmount: Number(existingCycle?.collectedAmount ?? 0),
-  invoiceDate: existingCycle?.invoiceDate ?? anchorDate ?? undefined,
-  billingSubmittedDate: existingCycle?.billingSubmittedDate ?? undefined,
+  invoiceDate:
+    existingCycle?.invoiceDate ??
+    existingCycle?.billingSubmittedDate ??
+    anchorDate ??
+    undefined,
+  billingSubmittedDate: getBillingSubmittedDate(existingCycle, anchorDate),
   paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
   paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
   paymentDueDate:
@@ -524,15 +540,11 @@ const POForm = ({
     }
 
     const anchorDate = getManualBillingCycleAnchorDate(startFrom, endDate);
-    const normalizedCycles = existingCycles.map((cycle, index) =>
+    const normalizedCycles = existingCycles.map((cycle) =>
       createBillingCycleDraft({
         existingCycle: cycle,
         anchorDate,
-        invoiceAmount:
-          existingCycles.length === 1 && index === 0
-            ? Number(watchPOAmount ?? 0)
-            : Number(cycle?.invoiceAmount ?? 0),
-        preserveInvoiceAmount: !(existingCycles.length === 1 && index === 0),
+        invoiceAmount: Number(cycle?.invoiceAmount ?? 0),
       }),
     );
 
@@ -543,7 +555,6 @@ const POForm = ({
     form,
     replace,
     startFrom,
-    watchPOAmount,
   ]);
 
   // ---------------- SUBMIT ----------------
@@ -628,9 +639,15 @@ const POForm = ({
         invoiceNumber: existingCycle?.invoiceNumber ?? "",
         invoiceAmount: Number(generatedInvoiceAmounts[index] ?? 0),
         collectedAmount: Number(existingCycle?.collectedAmount ?? 0),
-        invoiceDate: existingCycle?.invoiceDate ?? cycleDates.invoiceDate,
+        invoiceDate:
+          existingCycle?.invoiceDate ??
+          existingCycle?.billingSubmittedDate ??
+          cycleDates.invoiceDate,
         billingSubmittedDate:
-          existingCycle?.billingSubmittedDate ?? cycleDates.billingSubmittedDate,
+          existingCycle?.invoiceDate ??
+          existingCycle?.billingSubmittedDate ??
+          cycleDates.invoiceDate ??
+          cycleDates.billingSubmittedDate,
         paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
         paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
         paymentDueDate:
@@ -672,10 +689,16 @@ const POForm = ({
         invoiceAmount: Number(bc.invoiceAmount ?? 0),
         collectedAmount: Number(bc.collectedAmount ?? 0),
 
-        invoiceDate: bc.invoiceDate ? new Date(bc.invoiceDate) : undefined,
-        billingSubmittedDate: bc.billingSubmittedDate
-          ? new Date(bc.billingSubmittedDate)
-          : undefined,
+        invoiceDate: bc.invoiceDate
+          ? new Date(bc.invoiceDate)
+          : bc.billingSubmittedDate
+            ? new Date(bc.billingSubmittedDate)
+            : undefined,
+        billingSubmittedDate: bc.invoiceDate
+          ? new Date(bc.invoiceDate)
+          : bc.billingSubmittedDate
+            ? new Date(bc.billingSubmittedDate)
+            : undefined,
         paymentReceivedDate: bc.paymentReceivedDate
           ? new Date(bc.paymentReceivedDate)
           : undefined,

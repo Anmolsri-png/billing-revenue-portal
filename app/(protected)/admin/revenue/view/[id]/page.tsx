@@ -19,6 +19,7 @@ type BillingCycleView = {
   invoiceAmount?: number | null;
   collectedAmount?: number | null;
   invoiceDate?: Date | string | null;
+  paymentReceivedDate?: Date | string | null;
   paymentDueDate?: Date | string | null;
   invoiceNumber?: string | null;
   paymentReceived?: string | null;
@@ -262,7 +263,7 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
         {billingCycles.length ? (
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-600">
                     <th className="p-3 text-left font-semibold">#</th>
@@ -272,6 +273,7 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
                     <th className="p-3 text-right font-semibold">Collected</th>
                     <th className="p-3 text-right font-semibold">Pending</th>
                     <th className="p-3 text-left font-semibold">Invoice Date</th>
+                    <th className="p-3 text-left font-semibold">Payment Received Date</th>
                     <th className="p-3 text-left font-semibold">Due Date</th>
                     <th className="p-3 text-left font-semibold">Status</th>
                   </tr>
@@ -305,6 +307,11 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
                         <td className="p-3 text-zinc-700">
                           {bc.invoiceDate
                             ? format(new Date(bc.invoiceDate), "dd/MM/yyyy")
+                            : "-"}
+                        </td>
+                        <td className="p-3 text-zinc-700">
+                          {bc.paymentReceivedDate
+                            ? format(new Date(bc.paymentReceivedDate), "dd/MM/yyyy")
                             : "-"}
                         </td>
                         <td className="p-3 text-zinc-700">

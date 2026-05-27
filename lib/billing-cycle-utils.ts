@@ -370,24 +370,28 @@ export function getPurchaseOrderCycleDates(
 
     return {
       invoiceDate: midDate,
-      billingSubmittedDate: undefined,
+      billingSubmittedDate: midDate,
     };
   }
 
   if (type === "END") {
+    const invoiceDate = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
+      0,
+    );
+
     return {
-      invoiceDate: new Date(
-        monthStart.getFullYear(),
-        monthStart.getMonth() + 1,
-        0,
-      ),
-      billingSubmittedDate: undefined,
+      invoiceDate,
+      billingSubmittedDate: invoiceDate,
     };
   }
 
+  const invoiceDate = monthStart;
+
   return {
-    invoiceDate: monthStart,
-    billingSubmittedDate: undefined,
+    invoiceDate,
+    billingSubmittedDate: invoiceDate,
   };
 }
 
@@ -416,7 +420,7 @@ export function generatePurchaseOrderBillingCycles({
     const cycleDates = planInterval.singleCycle
       ? {
           invoiceDate: cycle.scheduledDate,
-          billingSubmittedDate: undefined,
+          billingSubmittedDate: cycle.scheduledDate,
         }
       : getPurchaseOrderCycleDates(cycle.scheduledDate, type);
 

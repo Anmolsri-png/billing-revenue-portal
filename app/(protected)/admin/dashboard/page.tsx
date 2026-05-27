@@ -6,10 +6,11 @@ import PurchaseOrderDashboard from "@/components/purchase-order/purchase-order-d
 
 export default async function DashboardPage({
   searchParams,
-}: {
-  searchParams?: Promise<{ tab?: string }> | { tab?: string };
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
+}: PageProps<"/admin/dashboard">) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const activeTab = Array.isArray(resolvedSearchParams.tab)
+    ? resolvedSearchParams.tab[0]
+    : resolvedSearchParams.tab;
   const projects = await getProjects();
   const companies = await getCompanys();
   const customers = await getCustomers();
@@ -30,7 +31,7 @@ export default async function DashboardPage({
   });
 
   const currentTab =
-    resolvedSearchParams?.tab === "revenue" ? "revenue" : "pl";
+    activeTab === "revenue" ? "revenue" : "pl";
 
   if (currentTab === "revenue") {
     return (

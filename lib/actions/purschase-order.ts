@@ -20,6 +20,15 @@ const emptyToUndefined = (value?: string | null) => {
   return trimmed === "" ? undefined : trimmed;
 };
 
+const resolveBillingSubmittedDate = (billingCycle?: {
+  billingSubmittedDate?: string | Date | null;
+  invoiceDate?: string | Date | null;
+}) => {
+  return toLocalDate(
+    billingCycle?.invoiceDate ?? billingCycle?.billingSubmittedDate,
+  );
+};
+
 const resolvePaymentDueDate = (billingCycle?: {
   billingSubmittedDate?: string | Date | null;
   invoiceDate?: string | Date | null;
@@ -94,7 +103,7 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
           invoiceAmount: generatedInvoiceAmount,
           collectedAmount: 0,
           invoiceDate: cycle.invoiceDate,
-          billingSubmittedDate: cycle.billingSubmittedDate,
+          billingSubmittedDate: resolveBillingSubmittedDate(cycle),
           paymentReceivedDate: null,
           paymentDueDate: resolvePaymentDueDate(cycle),
           paymentReceived: PaymentReceived.NO,
@@ -106,7 +115,7 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
           invoiceAmount: bc.invoiceAmount ?? 0,
           collectedAmount: bc.collectedAmount ?? 0,
           invoiceDate: toLocalDate(bc.invoiceDate),
-          billingSubmittedDate: toLocalDate(bc.billingSubmittedDate),
+          billingSubmittedDate: resolveBillingSubmittedDate(bc),
           paymentReceivedDate: toLocalDate(bc.paymentReceivedDate),
           paymentDueDate: resolvePaymentDueDate(bc),
           paymentReceived: bc.paymentReceived,
@@ -211,7 +220,7 @@ export async function updatePurchaseOrder(
             invoiceAmount: bc.invoiceAmount ?? 0,
             collectedAmount: bc.collectedAmount ?? 0,
             invoiceDate: toLocalDate(bc.invoiceDate),
-            billingSubmittedDate: toLocalDate(bc.billingSubmittedDate),
+            billingSubmittedDate: resolveBillingSubmittedDate(bc),
             paymentReceivedDate: toLocalDate(bc.paymentReceivedDate),
             paymentDueDate: resolvePaymentDueDate(bc),
             paymentReceived: bc.paymentReceived,

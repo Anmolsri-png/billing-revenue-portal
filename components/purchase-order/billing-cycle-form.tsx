@@ -140,29 +140,21 @@ const BillingCycleForm = ({
     if (Number.isNaN(nextMonth) || Number.isNaN(nextYear)) return;
 
     const existingInvoiceDate = getValidDate(invoiceDate);
-    const existingSubmittedDate = getValidDate(billingSubmittedDate);
     const invoiceDay = existingInvoiceDate?.getDate() ?? 1;
-    const submittedDay = existingSubmittedDate?.getDate() ?? 1;
     const nextInvoiceDate = new Date(nextYear, nextMonth, invoiceDay);
-    const nextSubmittedDate = existingSubmittedDate
-      ? new Date(nextYear, nextMonth, submittedDay)
-      : null;
 
     setBillingCycleDateValue(
       `billingCycles.${index}.invoiceDate`,
       nextInvoiceDate,
     );
     setBillingCycleDateValue(
+      `billingCycles.${index}.billingSubmittedDate`,
+      nextInvoiceDate,
+    );
+    setBillingCycleDateValue(
       `billingCycles.${index}.paymentDueDate`,
       nextInvoiceDate,
     );
-
-    if (existingSubmittedDate) {
-      setBillingCycleDateValue(
-        `billingCycles.${index}.billingSubmittedDate`,
-        nextSubmittedDate,
-      );
-    }
   };
 
   return (
@@ -380,6 +372,10 @@ const BillingCycleForm = ({
                       onSelect={(date) => {
                         field.onChange(date);
                         setBillingCycleDateValue(
+                          `billingCycles.${index}.billingSubmittedDate`,
+                          date ?? null,
+                        );
+                        setBillingCycleDateValue(
                           `billingCycles.${index}.paymentDueDate`,
                           date ?? null,
                         );
@@ -406,27 +402,21 @@ const BillingCycleForm = ({
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className={dateButtonClassName(!!field.value)}
+                      className={cn(
+                        dateButtonClassName(!!field.value),
+                        "cursor-not-allowed bg-slate-50/90 text-slate-600",
+                      )}
+                      disabled
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {field.value ? format(field.value, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    avoidCollisions={false}
-                    className="w-auto p-0"
-                    side="bottom"
-                    sideOffset={8}
-                  >
-                    <Calendar
-                      mode="single"
-                      selected={field.value as Date}
-                      onSelect={field.onChange}
-                    />
-                  </PopoverContent>
                 </Popover>
               </FormControl>
+              <p className="text-xs text-slate-500">
+                Billing submitted date follows the invoice date automatically.
+              </p>
               <FormMessage />
             </FormItem>
           )}
