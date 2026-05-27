@@ -406,17 +406,16 @@ const BillingCycleForm = ({
                         dateButtonClassName(!!field.value),
                         "cursor-not-allowed bg-slate-50/90 text-slate-600",
                       )}
-                      disabled
-                    >
+                      >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {field.value ? format(field.value, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
                 </Popover>
               </FormControl>
-              <p className="text-xs text-slate-500">
+              {/* <p className="text-xs text-slate-500">
                 Billing submitted date follows the invoice date automatically.
-              </p>
+              </p> */}
               <FormMessage />
             </FormItem>
           )}
