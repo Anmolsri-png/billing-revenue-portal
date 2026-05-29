@@ -272,17 +272,29 @@ function getPaymentDate(
   return null;
 }
 
-function hasRecordedPayment(
+function hasPaymentChartRecord(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
-    "paymentReceived" | "paymentReceivedDate" | "collectedAmount"
+    "paymentReceived" | "paymentReceivedDate"
   >,
 ) {
   return (
-    cycle.paymentReceived === PaymentReceived.YES ||
-    Boolean(cycle.paymentReceivedDate) ||
-    Number(cycle.collectedAmount || 0) > 0
+    cycle.paymentReceived === PaymentReceived.YES &&
+    Boolean(cycle.paymentReceivedDate)
   );
+}
+
+function getPaymentChartDate(
+  cycle: Pick<
+    BillingCycleWithPurchaseOrder,
+    "paymentReceived" | "paymentReceivedDate"
+  >,
+): Date | null {
+  if (!hasPaymentChartRecord(cycle)) {
+    return null;
+  }
+
+  return cycle.paymentReceivedDate ?? null;
 }
 
 function getEffectiveCollectedAmount(
@@ -515,8 +527,8 @@ export async function getMonthlyBillingData(
         }
       }
     }
-    if (hasRecordedPayment(cycle)) {
-      const paymentDate = getPaymentDate(cycle);
+    if (hasPaymentChartRecord(cycle)) {
+      const paymentDate = getPaymentChartDate(cycle);
 
       if (paymentDate && collected > 0) {
         const normalizedPaymentDate = normalizeDate(paymentDate);
@@ -908,7 +920,7 @@ export async function getRevenueDetailsByMonth(
     .filter((cycle) => {
       const seriesDate =
         params.series === "payment"
-          ? getPaymentDate(cycle)
+          ? getPaymentChartDate(cycle)
           : getInvoiceDate(cycle);
 
       if (!seriesDate) {
@@ -933,7 +945,10 @@ export async function getRevenueDetailsByMonth(
         return false;
       }
 
-      if (params.series === "payment" && !hasRecordedPayment(cycle)) {
+      if (
+        params.series === "payment" &&
+        !hasPaymentChartRecord(cycle)
+      ) {
         return false;
       }
 
@@ -948,7 +963,7 @@ export async function getRevenueDetailsByMonth(
 
       const seriesDate =
         params.series === "payment"
-          ? getPaymentDate(cycle)
+          ? getPaymentChartDate(cycle)
           : getInvoiceDate(cycle);
 
       return {
