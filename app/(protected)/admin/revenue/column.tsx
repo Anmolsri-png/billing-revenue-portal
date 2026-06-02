@@ -70,7 +70,11 @@ export const getUsersColumns = ({
 }): ColumnDef<RevenueRow>[] => {
   const columns: ColumnDef<RevenueRow>[] = [
     {
-      accessorKey: "companyId",
+      id: "company",
+      accessorFn: (row) =>
+        [row.company?.name, row.customer?.companyName]
+          .filter(Boolean)
+          .join(" "),
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Company
@@ -89,7 +93,15 @@ export const getUsersColumns = ({
       ),
     },
     {
-      accessorKey: "vendorId",
+      id: "vendor",
+      accessorFn: (row) =>
+        [
+          row.vendor?.companyName,
+          row.vendor?.firstName,
+          row.vendor?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" "),
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Vendor
@@ -117,7 +129,9 @@ export const getUsersColumns = ({
       },
     },
     {
-      accessorKey: "customerPONumber",
+      id: "customerPONumber",
+      accessorFn: (row) =>
+        [row.customerPONumber, row.poOwner].filter(Boolean).join(" "),
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           PO Number
@@ -135,7 +149,8 @@ export const getUsersColumns = ({
       ),
     },
     {
-      accessorKey: "scope",
+      accessorFn: (row) => row.scope ?? "",
+      id: "scope",
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Scope Of Work
@@ -150,7 +165,17 @@ export const getUsersColumns = ({
       ),
     },
     {
-      accessorKey: "poAmount",
+      id: "billed",
+      accessorFn: (row) => {
+        const totals = getRevenueTotals(row.billingCycles);
+
+        return [
+          formatCurrency(totals.billed),
+          formatCurrency(totals.collected),
+          totals.billed.toString(),
+          totals.collected.toString(),
+        ].join(" ");
+      },
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Billed
@@ -173,6 +198,21 @@ export const getUsersColumns = ({
     },
     {
       id: "collectionHealth",
+      accessorFn: (row) => {
+        const totals = getRevenueTotals(row.billingCycles);
+        const pending = Math.max(totals.billed - totals.collected, 0);
+        const ratio =
+          totals.billed > 0
+            ? Math.round((totals.collected / totals.billed) * 100)
+            : 0;
+
+        return [
+          `${ratio}% realized`,
+          `${ratio} realized`,
+          formatCurrency(pending),
+          pending.toString(),
+        ].join(" ");
+      },
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Collection Health
@@ -214,7 +254,8 @@ export const getUsersColumns = ({
       },
     },
     {
-      accessorKey: "billingPlanId",
+      id: "billingPlan",
+      accessorFn: (row) => row.billingPlan?.name ?? "",
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Billing Plan
@@ -230,7 +271,8 @@ export const getUsersColumns = ({
       ),
     },
     {
-      accessorKey: "serviceTypeId",
+      id: "serviceType",
+      accessorFn: (row) => row.ServiceType?.name ?? "",
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Service Type
@@ -246,7 +288,8 @@ export const getUsersColumns = ({
       ),
     },
     {
-      accessorKey: "status",
+      accessorFn: (row) => row.status ?? "",
+      id: "status",
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-white">
           Status
@@ -282,6 +325,7 @@ export const getUsersColumns = ({
 
   columns.push({
     id: "actions",
+    enableGlobalFilter: false,
     header: () => (
       <span className="text-xs font-semibold uppercase tracking-wider text-white">
         Action
