@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 
 import { getPurchaseOrderById } from "@/lib/actions/purschase-order";
-import { format } from "date-fns";
 import Link from "next/link";
 import moment from "moment";
 import { ArrowLeft, Clock3, IndianRupee, ReceiptText } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { formatStoredDate } from "@/lib/date-utils";
 import { canAccess } from "@/lib/rbac";
 
 interface Props {
@@ -214,14 +214,8 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
           <Detail label="Owner" value={po.poOwner} />
           <Detail label="Payment Terms" value={po.paymentTerms} />
           <Detail label="Remark" value={po.remark} />
-          <Detail
-            label="Start Date"
-            value={po.startFrom ? format(new Date(po.startFrom), "dd/MM/yyyy") : "-"}
-          />
-          <Detail
-            label="End Date"
-            value={po.endDate ? format(new Date(po.endDate), "dd/MM/yyyy") : "-"}
-          />
+          <Detail label="Start Date" value={formatStoredDate(po.startFrom)} />
+          <Detail label="End Date" value={formatStoredDate(po.endDate)} />
         </Panel>
 
         <Panel title="Relations">
@@ -305,19 +299,13 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
                           {formatCurrency(pendingAmount)}
                         </td>
                         <td className="p-3 text-zinc-700">
-                          {bc.invoiceDate
-                            ? format(new Date(bc.invoiceDate), "dd/MM/yyyy")
-                            : "-"}
+                          {formatStoredDate(bc.invoiceDate)}
                         </td>
                         <td className="p-3 text-zinc-700">
-                          {bc.paymentReceivedDate
-                            ? format(new Date(bc.paymentReceivedDate), "dd/MM/yyyy")
-                            : "-"}
+                          {formatStoredDate(bc.paymentReceivedDate)}
                         </td>
                         <td className="p-3 text-zinc-700">
-                          {bc.paymentDueDate
-                            ? format(new Date(bc.paymentDueDate), "dd/MM/yyyy")
-                            : "-"}
+                          {formatStoredDate(bc.paymentDueDate)}
                         </td>
                         <td className="p-3">
                           <StatusBadge value={bc.paymentReceived} />

@@ -3,13 +3,13 @@
 import type { ReactNode } from "react";
 
 import { fetchPLPageData } from "@/lib/actions/project";
-import { format } from "date-fns";
 import Link from "next/link";
 import moment from "moment";
 import { ArrowLeft, BriefcaseBusiness, IndianRupee, TrendingUp } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { formatStoredDate } from "@/lib/date-utils";
 import { canAccess } from "@/lib/rbac";
 
 type BillingCycleView = {
@@ -245,14 +245,8 @@ export default async function PLViewPage({ params }: Props) {
         <Panel title="Project Details">
           <Detail label="Project Name" value={project.projectName} />
           <Detail label="Status" value={<StatusBadge value={project.status} />} />
-          <Detail
-            label="Start Date"
-            value={project.startDate ? format(new Date(project.startDate), "dd/MM/yyyy") : "-"}
-          />
-          <Detail
-            label="End Date"
-            value={project.endDate ? format(new Date(project.endDate), "dd/MM/yyyy") : "-"}
-          />
+          <Detail label="Start Date" value={formatStoredDate(project.startDate)} />
+          <Detail label="End Date" value={formatStoredDate(project.endDate)} />
           <Detail label="PO Value" value={`${rupee}${formatCurrency(project.poValue)}`} />
           <Detail label="Resource Count" value={totalResourceCount} />
           <Detail label="Order Type" value={project.orderType} />

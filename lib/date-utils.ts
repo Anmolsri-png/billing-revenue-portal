@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 export function getCurrentFinancialYear(
   referenceDate = new Date(),
 ) {
@@ -36,4 +38,59 @@ export function getFinancialYearRangeToDate(
     start,
     end: cappedEnd < end ? cappedEnd : end,
   };
+}
+
+export function parseStoredDateValue(
+  value?: Date | string | null,
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+
+    return new Date(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+    );
+  }
+
+  const dateMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})/,
+  );
+
+  if (dateMatch) {
+    const [, year, month, day] = dateMatch;
+
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+    );
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Date(
+    parsed.getUTCFullYear(),
+    parsed.getUTCMonth(),
+    parsed.getUTCDate(),
+  );
+}
+
+export function formatStoredDate(
+  value?: Date | string | null,
+  pattern = "dd/MM/yyyy",
+) {
+  const parsed = parseStoredDateValue(value);
+
+  return parsed ? format(parsed, pattern) : "-";
 }
