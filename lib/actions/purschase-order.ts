@@ -3,14 +3,14 @@
 import { prisma } from "../prisma";
 import { purchaseOrderSchema } from "../validators";
 import { formatError } from "../utils";
+import { toBusinessDateValue } from "../date-utils";
 import { PurchaseOrder } from "@/types";
 import { PaymentReceived, Prisma } from "@prisma/client";
 import { generatePurchaseOrderBillingCycles } from "../billing-cycle-utils";
 
 // ================= DATE HELPER =================
 const toLocalDate = (date?: string | Date | null): Date | undefined => {
-  if (!date) return undefined;
-  return new Date(typeof date === "string" ? `${date}T00:00:00` : date);
+  return toBusinessDateValue(date) ?? undefined;
 };
 
 const emptyToUndefined = (value?: string | null) => {
@@ -85,8 +85,8 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
       !validated.billingCycles?.length &&
       validated.startFrom
         ? generatePurchaseOrderBillingCycles({
-            startDate: new Date(validated.startFrom),
-            endDate: validated.endDate ? new Date(validated.endDate) : null,
+            startDate: toLocalDate(validated.startFrom) ?? new Date(),
+            endDate: toLocalDate(validated.endDate) ?? null,
             totalBillingCycles: billingPlan.totalBillingCycles,
             planName: billingPlan.name,
             type: billingPlan.billingCycleType as "START" | "MID" | "END",

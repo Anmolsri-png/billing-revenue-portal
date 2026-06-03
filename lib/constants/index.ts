@@ -6,6 +6,7 @@ import {
   CompanyStatus,
   BillingCycleType,
 } from "@prisma/client";
+import { toBusinessDateValue } from "../date-utils";
 
 export const APP_NAME =
   process.env.NEXT_APP_APP_NAME ?? "Billing & Revenue Portal";
@@ -19,7 +20,7 @@ export const SERVER_URL =
 
 /* ---------------- COMMON ---------------- */
 export const formatDate = (date?: Date | null) =>
-  date ? date.toISOString().split("T")[0] : "";
+  toBusinessDateValue(date)?.toISOString().split("T")[0] ?? "";
 
 /* ---------------- ROLE ---------------- */
 export const roleDefaultValues = {

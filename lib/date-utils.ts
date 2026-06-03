@@ -1,5 +1,44 @@
 import { format } from "date-fns";
 
+const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+
+function getBusinessDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = Number(
+    parts.find((part) => part.type === "year")?.value,
+  );
+  const month = Number(
+    parts.find((part) => part.type === "month")?.value,
+  );
+  const day = Number(
+    parts.find((part) => part.type === "day")?.value,
+  );
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return { day, month, year };
+}
+
+function createDateFromParts(parts: {
+  day: number;
+  month: number;
+  year: number;
+}) {
+  return new Date(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+  );
+}
+
 export function getCurrentFinancialYear(
   referenceDate = new Date(),
 ) {
@@ -52,15 +91,12 @@ export function parseStoredDateValue(
       return null;
     }
 
-    return new Date(
-      value.getUTCFullYear(),
-      value.getUTCMonth(),
-      value.getUTCDate(),
-    );
+    const parts = getBusinessDateParts(value);
+    return parts ? createDateFromParts(parts) : null;
   }
 
   const dateMatch = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})/,
+    /^(\d{4})-(\d{2})-(\d{2})$/,
   );
 
   if (dateMatch) {
@@ -79,10 +115,25 @@ export function parseStoredDateValue(
     return null;
   }
 
+  const parts = getBusinessDateParts(parsed);
+  return parts ? createDateFromParts(parts) : null;
+}
+
+export function toBusinessDateValue(
+  value?: Date | string | null,
+) {
+  const parsed = parseStoredDateValue(value);
+
+  if (!parsed) {
+    return null;
+  }
+
   return new Date(
-    parsed.getUTCFullYear(),
-    parsed.getUTCMonth(),
-    parsed.getUTCDate(),
+    Date.UTC(
+      parsed.getFullYear(),
+      parsed.getMonth(),
+      parsed.getDate(),
+    ),
   );
 }
 

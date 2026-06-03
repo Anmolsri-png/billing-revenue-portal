@@ -5,7 +5,10 @@ import { prisma } from "../prisma";
 import { projectSchema } from "../validators";
 import { formatError } from "../utils";
 import { buildFilters, buildMonthlyPLFilters } from "../filter";
-import { getFinancialYearRange } from "../date-utils";
+import {
+  getFinancialYearRange,
+  toBusinessDateValue,
+} from "../date-utils";
 
 function normalizeProjectPayload(project: Project, amount: {
   totalRevenue: number;
@@ -35,8 +38,8 @@ function normalizeProjectPayload(project: Project, amount: {
   return {
     companyId,
     projectName,
-    startDate: project.startDate ?? null,
-    endDate: project.endDate ?? null,
+    startDate: toBusinessDateValue(project.startDate) ?? null,
+    endDate: toBusinessDateValue(project.endDate) ?? null,
     poValue: project.poValue ?? 0,
     resourceCount: project.resourceCount ?? 0,
     billingPlanId,
