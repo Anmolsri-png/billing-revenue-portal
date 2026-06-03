@@ -190,7 +190,12 @@ function getSummaryAsOfDate(
   filters?: BillingStatusFilters,
   referenceDate = new Date(),
 ) {
-  let asOfDate = normalizeEndOfDate(referenceDate);
+  const currentMonthEnd = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth() + 1,
+    0,
+  );
+  let asOfDate = normalizeEndOfDate(currentMonthEnd);
 
   if (typeof year === "number") {
     asOfDate = getEarlierDate(asOfDate, getFinancialYearRange(year).end);
