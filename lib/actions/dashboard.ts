@@ -604,7 +604,7 @@ export async function getRevenueDashboardSummary(
 
     if (invoiceDate) {
       const normalizedInvoiceDate = normalizeDate(invoiceDate);
-      let matchesInvoiceSelection = true;
+      let matchesFinancialYearSelection = true;
 
       if (typeof year === "number") {
         const fyRange = getFinancialYearRange(year);
@@ -613,20 +613,22 @@ export async function getRevenueDashboardSummary(
           normalizedInvoiceDate < fyRange.start ||
           normalizedInvoiceDate > fyRange.end
         ) {
-          matchesInvoiceSelection = false;
+          matchesFinancialYearSelection = false;
         }
       }
 
-      if (
-        matchesInvoiceSelection &&
-        isWithinFilterDateRange(normalizedInvoiceDate, filters) &&
-        matchesFilterMonth(normalizedInvoiceDate, filters)
-      ) {
+      if (matchesFinancialYearSelection) {
         const billedAmount = Number(cycle.invoiceAmount || 0);
+        const matchesTillNowSelection =
+          isWithinFilterDateRange(normalizedInvoiceDate, filters) &&
+          matchesFilterMonth(normalizedInvoiceDate, filters);
 
         totalRevenueProjected += billedAmount;
 
-        if (normalizedInvoiceDate <= asOfDate) {
+        if (
+          matchesTillNowSelection &&
+          normalizedInvoiceDate <= asOfDate
+        ) {
           totalRevenueTillNow += billedAmount;
 
           const paymentDate = getPaymentDate(cycle);

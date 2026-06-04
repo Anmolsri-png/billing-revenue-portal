@@ -218,8 +218,8 @@ function MetricCard({
   icon: React.ElementType;
   tone: string;
   suffix?: string;
-  monthLabel: string;
-  yearLabel: string;
+  monthLabel?: string;
+  yearLabel?: string;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
@@ -235,17 +235,25 @@ function MetricCard({
             <p className="text-xm font-bold tracking-tight text-slate-700">
               {label}
             </p>
-            <div className="flex items-center gap-1">
-              <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
-                {monthLabel}
-              </span>
+            {monthLabel || yearLabel ? (
+              <div className="flex items-center gap-1">
+                {monthLabel ? (
+                  <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                    {monthLabel}
+                  </span>
+                ) : null}
 
-              <span className="text-xs font-bold text-slate-500">/</span>
+                {monthLabel && yearLabel ? (
+                  <span className="text-xs font-bold text-slate-500">/</span>
+                ) : null}
 
-              <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
-                {yearLabel}
-              </span>
-            </div>
+                {yearLabel ? (
+                  <span className="rounded-full border border-blue-900 bg-blue-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                    {yearLabel}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-baseline gap-1.5">
             <p className="font-mono text-lg font-semibold tracking-tight text-slate-950 tabular-nums sm:text-xl">
@@ -394,9 +402,10 @@ const PurchaseOrderDashboard = ({
   const metrics = [
     {
       label: "Total Revenue Projected",
-      description: "Combined billed revenue across the current selection",
+      description: "Combined billed revenue across the selected financial year",
       value: formatCurrency(summary.totalRevenueProjected),
       icon: IndianRupee,
+      monthLabel: "Full Year",
       tone: "bg-violet-500",
     },
     {
@@ -404,6 +413,7 @@ const PurchaseOrderDashboard = ({
       description: "Billed revenue recorded till the current financial month",
       value: formatCurrency(summary.totalRevenueTillNow),
       icon: IndianRupee,
+      monthLabel: metricMonthLabel,
       tone: "bg-sky-500",
     },
     {
@@ -412,6 +422,7 @@ const PurchaseOrderDashboard = ({
         "Billing amount pending invoice generation after the billing date",
       value: formatCurrency(summary.dueForBillingTillNow),
       icon: CalendarIcon,
+      monthLabel: metricMonthLabel,
       tone: "bg-amber-500",
     },
     {
@@ -419,6 +430,7 @@ const PurchaseOrderDashboard = ({
       description: "Payments already received for billed revenue",
       value: formatCurrency(summary.collectedAmountTillNow),
       icon: TrendingUp,
+      monthLabel: metricMonthLabel,
       tone: "bg-emerald-500",
     },
     {
@@ -426,6 +438,7 @@ const PurchaseOrderDashboard = ({
       description: "Outstanding amount still pending collection",
       value: formatCurrency(summary.pendingCollectionTillNow),
       icon: TrendingDown,
+      monthLabel: metricMonthLabel,
       tone: "bg-rose-500",
     },
     {
@@ -434,6 +447,7 @@ const PurchaseOrderDashboard = ({
       value: formatNumber(summary.collectionEfficiency),
       suffix: "%",
       icon: Layers3,
+      monthLabel: metricMonthLabel,
       tone: "bg-cyan-500",
     },
     {
@@ -441,6 +455,7 @@ const PurchaseOrderDashboard = ({
       description: "Total billing records in the current view",
       value: formatNumber(revenueDetails.length),
       icon: Layers3,
+      monthLabel: metricMonthLabel,
       tone: "bg-indigo-500",
     },
   ];
@@ -726,7 +741,7 @@ const PurchaseOrderDashboard = ({
                 icon={metric.icon}
                 tone={metric.tone}
                 suffix={metric.suffix}
-                monthLabel={metricMonthLabel}
+                monthLabel={metric.monthLabel}
                 yearLabel={metricYearLabel}
               />
             ))}
