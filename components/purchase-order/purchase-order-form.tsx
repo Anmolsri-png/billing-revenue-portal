@@ -385,6 +385,12 @@ const POForm = ({
       supportsManualPurchaseOrderBillingCycles(watchPurchaseOrderType),
     [isOTSSelected, watchPurchaseOrderType],
   );
+  const canEditInvoiceAmount = React.useMemo(
+    () =>
+      canManageManualBillingCycles ||
+      watchPurchaseOrderType === PurchaseOrderType.NORMAL,
+    [canManageManualBillingCycles, watchPurchaseOrderType],
+  );
   const isInitialUpdateGenerationState = React.useMemo(() => {
     if (!update || !data) return false;
 
@@ -1380,6 +1386,11 @@ const POForm = ({
                     multiple billing cycles and enter each invoice amount
                     manually.
                   </p>
+                ) : watchPurchaseOrderType === PurchaseOrderType.NORMAL ? (
+                  <p className="text-sm text-slate-500">
+                    Normal purchase orders keep the invoice amount prefilled,
+                    and you can edit it directly in the billing cycle.
+                  </p>
                 ) : null}
 
                 <Card className={formCardClassName}>
@@ -1392,7 +1403,7 @@ const POForm = ({
                       field={fields[activeCycleIndex]}
                       index={activeCycleIndex}
                       form={form}
-                      canEditInvoiceAmount={canManageManualBillingCycles}
+                      canEditInvoiceAmount={canEditInvoiceAmount}
                       canRemoveCycle={
                         canManageManualBillingCycles && fields.length > 1
                       }
