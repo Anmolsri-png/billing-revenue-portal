@@ -1,4 +1,4 @@
-import "dotenv/config"
+import "@/lib/load-env"
 import bcrypt from "bcrypt"
 import { prisma } from "@/lib/prisma"
 import { Status } from "@prisma/client"

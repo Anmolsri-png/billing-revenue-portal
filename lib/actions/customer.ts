@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { Customer } from "@/types";
 import { prisma } from "../prisma";
 import { customerSchema } from "../validators";
@@ -62,6 +63,9 @@ export async function createCustomer(data: Customer) {
       data: payload
     })
 
+    revalidatePath("/admin/customer");
+    revalidatePath("/admin/customer/create");
+
     return {
       success: true,
       message: "Customer created successfully"
@@ -113,6 +117,10 @@ export async function updateCustomer(data: Customer, id: string) {
       data: payload
     })
 
+    revalidatePath("/admin/customer");
+    revalidatePath("/admin/customer/create");
+    revalidatePath(`/admin/customer/edit/${id}`);
+
     return {
       success: true,
       message: "Customer updated successfully"
@@ -157,6 +165,10 @@ export async function deleteCustomer(id: string) {
     await prisma.customer.delete({
       where: { id }
     })
+
+    revalidatePath("/admin/customer");
+    revalidatePath("/admin/customer/create");
+    revalidatePath(`/admin/customer/edit/${id}`);
 
     return {
       success: true,

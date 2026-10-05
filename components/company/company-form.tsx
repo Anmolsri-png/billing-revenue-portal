@@ -125,7 +125,6 @@ export default function CompanyForm({
         );
 
         router.push("/admin/company");
-        router.refresh();
       } catch (error) {
         console.error(error);
 
