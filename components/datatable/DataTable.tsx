@@ -43,6 +43,7 @@ interface DataTableProps<TData, TValue> {
   actions?: React.ReactNode;
   className?: string;
   rowClassName?: (row: TData, index: number) => string;
+  toolbar?: (filteredRows: TData[]) => React.ReactNode;
 }
 
 function getRowEdgeClass(className: string) {
@@ -83,6 +84,7 @@ export function DataTable<TData, TValue>({
   actions,
   className,
   rowClassName,
+  toolbar,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -180,7 +182,10 @@ export function DataTable<TData, TValue>({
               className="max-w-sm"
             />
 
-            {/* ✅ Columns button moved here */}
+            {toolbar?.(
+              table.getFilteredRowModel().rows.map((row) => row.original),
+            )}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">

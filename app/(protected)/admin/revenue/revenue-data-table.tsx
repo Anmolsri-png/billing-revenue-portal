@@ -5,6 +5,7 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import { DataTable } from "@/components/datatable/DataTable"
+import { RevenueExcelActions } from "@/components/revenue/revenue-excel-actions"
 import { deletePurchaseOrder } from "@/lib/actions/purschase-order"
 
 import { getUsersColumns } from "./column"
@@ -30,6 +31,7 @@ type RevenueDataTableProps = {
   data: RevenueRow[]
   canEdit: boolean
   canDelete: boolean
+  canCreate: boolean
   title: string
   actions?: React.ReactNode
 }
@@ -58,6 +60,7 @@ export default function RevenueDataTable({
   data,
   canEdit,
   canDelete,
+  canCreate,
   title,
   actions,
 }: RevenueDataTableProps) {
@@ -98,6 +101,12 @@ export default function RevenueDataTable({
         columns={columns}
         title={title}
         actions={actions}
+        toolbar={(filteredRows) => (
+          <RevenueExcelActions
+            canCreate={canCreate}
+            purchaseOrderIds={filteredRows.map((row) => row.id)}
+          />
+        )}
         rowClassName={(row) => {
           const totals = getRevenueTotals(row.billingCycles)
           const realization =

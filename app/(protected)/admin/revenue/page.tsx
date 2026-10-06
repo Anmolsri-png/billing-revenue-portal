@@ -26,6 +26,7 @@ const PurchaseOrdersPage = async () => {
       data={JSON.parse(JSON.stringify(purchaseOrders))}
       canEdit={canEdit}
       canDelete={canDelete}
+      canCreate={canCreate}
       title="Revenue"
       actions={
         canCreate && (

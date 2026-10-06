@@ -129,7 +129,7 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-Do not run `prisma migrate dev`, `prisma db push`, `prisma db seed`, or `prisma migrate reset` against the Neon database. `prisma db seed` creates an admin user with a fixed development password and is for an empty development database only.
+Do not run `prisma migrate dev`, `prisma db push`, or `prisma migrate reset` against the Neon database. `prisma db seed` creates the admin login for the current instance. Development uses `admin` / `admin123` unless `SEED_ADMIN_USERNAME`, `SEED_ADMIN_PASSWORD`, and `SEED_ADMIN_EMAIL` are set. Production requires those three variables on the host and refuses the development password.
 
 ## Git workflow
 
@@ -164,5 +164,5 @@ Do not reuse the development database URL on the production host.
 - `.env.example` contains placeholders only
 - Development and production use different `AUTH_SECRET` values
 - Do not copy the Neon URL into `.env.local`
-- Do not run seed against production
+- Run `prisma db seed` against production only with `APP_ENV=production` and a unique `SEED_ADMIN_USERNAME`, `SEED_ADMIN_PASSWORD`, and `SEED_ADMIN_EMAIL`
 - Email sender passwords stored in the `Configuration` table stay in that database and are not environment variables

@@ -1,0 +1,959 @@
+import * as XLSX from "xlsx";
+
+import { formatStoredDate } from "@/lib/date-utils";
+
+const MAX_IMPORT_ROWS = 1000;
+const MIN_DATE_YEAR = 1990;
+const MAX_DATE_YEAR = 2100;
+
+type ColumnKind = "text" | "number" | "date" | "payment" | "export";
+
+type RevenueColumn = {
+  header: string;
+  key: string;
+  required: boolean;
+  kind: ColumnKind;
+  aliases?: string[];
+};
+
+export const REVENUE_EXCEL_COLUMNS: RevenueColumn[] = [
+  { header: "Invoice Number", key: "invoiceNumber", required: true, kind: "text" },
+  {
+    header: "Customer PO Number",
+    key: "customerPONumber",
+    required: true,
+    kind: "text",
+    aliases: ["PO Number"],
+  },
+  { header: "Customer", key: "customerName", required: false, kind: "text" },
+  { header: "Company", key: "companyName", required: false, kind: "text" },
+  { header: "Vendor", key: "vendorName", required: false, kind: "text" },
+  { header: "Invoice Date", key: "invoiceDate", required: true, kind: "date" },
+  { header: "Invoice Amount", key: "invoiceAmount", required: true, kind: "number" },
+  { header: "Collected Amount", key: "collectedAmount", required: false, kind: "number" },
+  { header: "TDS", key: "tds", required: false, kind: "number" },
+  {
+    header: "Payment Received",
+    key: "paymentReceived",
+    required: true,
+    kind: "payment",
+    aliases: ["Payment Status"],
+  },
+  { header: "Payment Received Date", key: "paymentReceivedDate", required: false, kind: "date" },
+  { header: "Payment Due Date", key: "paymentDueDate", required: false, kind: "date" },
+  { header: "Billing Submitted Date", key: "billingSubmittedDate", required: false, kind: "date" },
+  { header: "Billing Remark", key: "billingRemark", required: false, kind: "text" },
+  { header: "PO Amount", key: "poAmount", required: false, kind: "number" },
+  { header: "PO Status", key: "poStatus", required: false, kind: "text" },
+  { header: "Scope Of Work", key: "scope", required: false, kind: "text" },
+  { header: "Billing Plan", key: "billingPlanName", required: false, kind: "text" },
+  { header: "Service Type", key: "serviceTypeName", required: false, kind: "text" },
+  { header: "Contract Duration", key: "contractDurationName", required: false, kind: "text" },
+  { header: "Contract Type", key: "contractTypeName", required: false, kind: "text" },
+  { header: "PO Owner", key: "poOwner", required: false, kind: "text" },
+  { header: "Payment Terms", key: "paymentTerms", required: false, kind: "text" },
+  { header: "Purchase Order Type", key: "purchaseOrderType", required: false, kind: "text" },
+  { header: "Start Date", key: "startFrom", required: false, kind: "date" },
+  { header: "End Date", key: "endDate", required: false, kind: "date" },
+  { header: "Remark", key: "remark", required: false, kind: "text" },
+];
+
+const IMPORT_KEYS = [
+  "invoiceNumber",
+  "customerPONumber",
+  "customerName",
+  "companyName",
+  "vendorName",
+  "invoiceDate",
+  "invoiceAmount",
+  "collectedAmount",
+  "tds",
+  "paymentReceived",
+  "paymentReceivedDate",
+  "paymentDueDate",
+  "billingSubmittedDate",
+  "billingRemark",
+  "poAmount",
+  "poStatus",
+  "scope",
+  "billingPlanName",
+  "serviceTypeName",
+  "contractDurationName",
+  "contractTypeName",
+  "poOwner",
+  "paymentTerms",
+  "purchaseOrderType",
+  "startFrom",
+  "endDate",
+  "remark",
+] as const;
+
+export type RevenueImportField = (typeof IMPORT_KEYS)[number];
+
+export type RevenueImportCandidate = {
+  excelRow: number;
+} & Record<RevenueImportField, unknown>;
+
+export type RevenueImportRowError = {
+  row: number;
+  messages: string[];
+};
+
+export type RevenueImportPreviewRow = {
+  excelRow: number;
+  invoiceNumber: string;
+  customerPONumber: string;
+  invoiceDate: string;
+  invoiceAmount: number;
+  collectedAmount: number;
+  tds: number;
+  paymentReceived: "YES" | "NO";
+  paymentReceivedDate: string;
+  paymentDueDate: string;
+  billingSubmittedDate: string;
+  billingRemark: string;
+};
+
+export type RevenuePurchaseOrderDraft = {
+  customerPONumber: string;
+  customerName: string;
+  companyName: string;
+  vendorName: string;
+  poAmount: number | null;
+  status: "LIVE" | "CLOSED";
+  scope: string;
+  billingPlanName: string;
+  serviceTypeName: string;
+  contractDurationName: string;
+  contractTypeName: string;
+  poOwner: string;
+  paymentTerms: string;
+  purchaseOrderType: "MAIL" | "AGREEMENT" | "NORMAL" | null;
+  startFrom: string | null;
+  endDate: string | null;
+  remark: string;
+};
+
+export type RevenueImportInsert = {
+  excelRow: number;
+  purchaseOrderId: string;
+  purchaseOrder: RevenuePurchaseOrderDraft | null;
+  billingCycleId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceAmount: number;
+  collectedAmount: number;
+  tds: number;
+  paymentReceived: "YES" | "NO";
+  paymentReceivedDate: string | null;
+  paymentDueDate: string;
+  billingSubmittedDate: string;
+  billingRemark: string;
+};
+
+export type RevenueExistingInvoice = {
+  id: string;
+  purchaseOrderId: string;
+};
+
+export type RevenueImportContext = {
+  purchaseOrdersByNumber: Map<string, string[]>;
+  existingInvoices: Map<string, RevenueExistingInvoice[]>;
+};
+
+export type RevenueExportCycle = {
+  invoiceNumber?: string | null;
+  invoiceDate?: Date | string | null;
+  invoiceAmount?: number | null;
+  collectedAmount?: number | null;
+  tds?: number | string | null;
+  paymentReceived?: string | null;
+  paymentReceivedDate?: Date | string | null;
+  paymentDueDate?: Date | string | null;
+  billingSubmittedDate?: Date | string | null;
+  billingRemark?: string | null;
+};
+
+export type RevenueExportPurchaseOrder = {
+  customerPONumber?: string | null;
+  poAmount?: number | null;
+  status?: string | null;
+  scope?: string | null;
+  poOwner?: string | null;
+  paymentTerms?: string | null;
+  purchaseOrderType?: string | null;
+  startFrom?: Date | string | null;
+  endDate?: Date | string | null;
+  remark?: string | null;
+  customerName?: string | null;
+  companyName?: string | null;
+  vendorName?: string | null;
+  billingPlanName?: string | null;
+  serviceTypeName?: string | null;
+  contractDurationName?: string | null;
+  contractTypeName?: string | null;
+  billingCycles?: RevenueExportCycle[] | null;
+};
+
+export type ParsedRevenueWorkbook = {
+  columnErrors: string[];
+  candidates: RevenueImportCandidate[];
+};
+
+export type AssessedRevenueImport = {
+  columnErrors: string[];
+  errors: RevenueImportRowError[];
+  rows: RevenueImportPreviewRow[];
+  inserts: RevenueImportInsert[];
+  canCommit: boolean;
+};
+
+function normalizeHeader(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function normalizeRevenueKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function columnByHeader(header: string) {
+  const normalized = normalizeHeader(header);
+
+  return REVENUE_EXCEL_COLUMNS.find((column) => {
+    if (normalizeHeader(column.header) === normalized) return true;
+    return column.aliases?.some(
+      (alias) => normalizeHeader(alias) === normalized,
+    );
+  });
+}
+
+export function revenueCellText(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  return "";
+}
+
+function isEmptyCell(value: unknown) {
+  return revenueCellText(value) === "";
+}
+
+function isBlankRow(row: unknown[]) {
+  return row.every((cell) => isEmptyCell(cell));
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function isRealCalendarDate(year: number, month: number, day: number) {
+  if (year < MIN_DATE_YEAR || year > MAX_DATE_YEAR) return false;
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function toIsoDate(year: number, month: number, day: number) {
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+export function formatImportDate(isoDate: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return isoDate;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function exportDate(value?: Date | string | null) {
+  if (!value) return "";
+  const formatted = formatStoredDate(value);
+  return formatted === "-" ? "" : formatted;
+}
+
+function exportAmount(value: unknown, includeZero: boolean) {
+  if (value == null || value === "") return includeZero ? 0 : "";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : "";
+}
+
+type ParsedDate = string | null | "invalid";
+type ParsedAmount = number | null | "invalid";
+
+function parseExcelDate(value: unknown): ParsedDate {
+  if (isEmptyCell(value)) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "invalid";
+    const year = value.getFullYear();
+    const month = value.getMonth() + 1;
+    const day = value.getDate();
+    return isRealCalendarDate(year, month, day)
+      ? toIsoDate(year, month, day)
+      : "invalid";
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return "invalid";
+    return isRealCalendarDate(parsed.y, parsed.m, parsed.d)
+      ? toIsoDate(parsed.y, parsed.m, parsed.d)
+      : "invalid";
+  }
+
+  const text = revenueCellText(value);
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return isRealCalendarDate(year, month, day)
+      ? toIsoDate(year, month, day)
+      : "invalid";
+  }
+
+  const localMatch = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(text);
+  if (localMatch) {
+    const day = Number(localMatch[1]);
+    const month = Number(localMatch[2]);
+    const year = Number(localMatch[3]);
+    return isRealCalendarDate(year, month, day)
+      ? toIsoDate(year, month, day)
+      : "invalid";
+  }
+
+  return "invalid";
+}
+
+function parseExcelAmount(value: unknown): ParsedAmount {
+  if (isEmptyCell(value)) return null;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "invalid";
+  }
+
+  const cleaned = revenueCellText(value).replace(/[₹,\s]/g, "");
+  if (!cleaned || !/^-?\d+(\.\d+)?$/.test(cleaned)) return "invalid";
+
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? amount : "invalid";
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function pushMessage(
+  messages: Map<number, string[]>,
+  row: number,
+  message: string,
+) {
+  const current = messages.get(row) ?? [];
+  current.push(message);
+  messages.set(row, current);
+}
+
+export function readRevenueWorkbookMatrix(buffer: Buffer) {
+  if (
+    !Buffer.isBuffer(buffer) ||
+    buffer.length < 4 ||
+    buffer[0] !== 0x50 ||
+    buffer[1] !== 0x4b
+  ) {
+    return {
+      matrix: [] as unknown[][],
+      error: "Choose a .xlsx Excel file.",
+    };
+  }
+
+  try {
+    const workbook = XLSX.read(buffer, {
+      type: "buffer",
+      cellDates: false,
+    });
+    const sheetName = workbook.SheetNames[0];
+
+    if (!sheetName) {
+      return { matrix: [] as unknown[][], error: "The workbook has no sheets." };
+    }
+
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(
+      workbook.Sheets[sheetName],
+      {
+        header: 1,
+        raw: true,
+        defval: null,
+        blankrows: true,
+      },
+    );
+
+    return { matrix, error: null };
+  } catch {
+    return {
+      matrix: [] as unknown[][],
+      error: "Could not read the Excel file.",
+    };
+  }
+}
+
+export function parseRevenueMatrix(matrix: unknown[][]): ParsedRevenueWorkbook {
+  const headerRow = matrix[0] ?? [];
+  const columnErrors: string[] = [];
+  const indexes = new Map<string, number>();
+
+  headerRow.forEach((cell, index) => {
+    const header = revenueCellText(cell);
+    if (!header) return;
+
+    const column = columnByHeader(header);
+    if (!column) return;
+
+    if (indexes.has(column.key)) {
+      columnErrors.push(`Duplicate column: ${column.header}`);
+      return;
+    }
+
+    indexes.set(column.key, index);
+  });
+
+  if (indexes.size === 0 && columnErrors.length === 0) {
+    columnErrors.push("The first row must contain the revenue column headers.");
+  }
+
+  for (const column of REVENUE_EXCEL_COLUMNS) {
+    if (column.required && !indexes.has(column.key)) {
+      columnErrors.push(`Missing required column: ${column.header}`);
+    }
+  }
+
+  if (columnErrors.length > 0) {
+    return { columnErrors, candidates: [] };
+  }
+
+  const candidates: RevenueImportCandidate[] = [];
+
+  matrix.slice(1).forEach((row, index) => {
+    const cells = Array.isArray(row) ? row : [];
+    if (isBlankRow(cells)) return;
+
+    const candidate = {
+      excelRow: index + 2,
+    } as RevenueImportCandidate;
+
+    for (const key of IMPORT_KEYS) {
+      const columnIndex = indexes.get(key);
+      candidate[key] =
+        columnIndex == null ? null : (cells[columnIndex] ?? null);
+    }
+
+    candidates.push(candidate);
+  });
+
+  if (candidates.length === 0) {
+    return {
+      columnErrors: ["The workbook has no data rows."],
+      candidates: [],
+    };
+  }
+
+  if (candidates.length > MAX_IMPORT_ROWS) {
+    return {
+      columnErrors: [
+        `The workbook has more than ${MAX_IMPORT_ROWS} data rows.`,
+      ],
+      candidates: [],
+    };
+  }
+
+  return { columnErrors: [], candidates };
+}
+
+export function parseRevenueWorkbook(buffer: Buffer): ParsedRevenueWorkbook & {
+  fileError?: string;
+} {
+  const read = readRevenueWorkbookMatrix(buffer);
+  if (read.error) {
+    return { columnErrors: [read.error], candidates: [], fileError: read.error };
+  }
+
+  return parseRevenueMatrix(read.matrix);
+}
+
+export function buildRevenueImportContext(
+  purchaseOrders: { id: string; customerPONumber?: string | null }[],
+  billingCycles: {
+    id: string;
+    purchaseOrderId: string;
+    invoiceNumber?: string | null;
+  }[],
+  candidates: RevenueImportCandidate[],
+): RevenueImportContext {
+  const wantedPurchaseOrders = new Set(
+    candidates
+      .map((candidate) =>
+        normalizeRevenueKey(revenueCellText(candidate.customerPONumber)),
+      )
+      .filter(Boolean),
+  );
+  const wantedInvoices = new Set(
+    candidates
+      .map((candidate) =>
+        normalizeRevenueKey(revenueCellText(candidate.invoiceNumber)),
+      )
+      .filter(Boolean),
+  );
+  const purchaseOrdersByNumber = new Map<string, string[]>();
+
+  for (const purchaseOrder of purchaseOrders) {
+    const key = normalizeRevenueKey(purchaseOrder.customerPONumber ?? "");
+    if (!key || !wantedPurchaseOrders.has(key)) continue;
+
+    const matches = purchaseOrdersByNumber.get(key) ?? [];
+    matches.push(purchaseOrder.id);
+    purchaseOrdersByNumber.set(key, matches);
+  }
+
+  const existingInvoices = new Map<string, RevenueExistingInvoice[]>();
+
+  for (const cycle of billingCycles) {
+    const key = normalizeRevenueKey(cycle.invoiceNumber ?? "");
+    if (!key || !wantedInvoices.has(key)) continue;
+
+    const matches = existingInvoices.get(key) ?? [];
+    matches.push({ id: cycle.id, purchaseOrderId: cycle.purchaseOrderId });
+    existingInvoices.set(key, matches);
+  }
+
+  return { purchaseOrdersByNumber, existingInvoices };
+}
+
+function parsePoStatus(value: unknown): "LIVE" | "CLOSED" | "invalid" | null {
+  const text = revenueCellText(value).toLowerCase();
+  if (!text) return null;
+  if (text === "live" || text === "open") return "LIVE";
+  if (text === "closed" || text === "close") return "CLOSED";
+  return "invalid";
+}
+
+function parsePurchaseOrderType(
+  value: unknown,
+): "MAIL" | "AGREEMENT" | "NORMAL" | null {
+  const text = revenueCellText(value).toUpperCase();
+  if (text === "MAIL" || text === "AGREEMENT" || text === "NORMAL") return text;
+  return null;
+}
+
+function readPurchaseOrderDraft(
+  candidate: RevenueImportCandidate,
+  customerPONumber: string,
+): { draft: RevenuePurchaseOrderDraft } | { error: string } {
+  const poAmount = parseExcelAmount(candidate.poAmount);
+  if (poAmount === "invalid") {
+    return { error: "PO Amount must be a valid number" };
+  }
+  if (typeof poAmount === "number" && poAmount < 0) {
+    return { error: "PO Amount cannot be negative" };
+  }
+
+  const status = parsePoStatus(candidate.poStatus);
+  if (status === "invalid") {
+    return { error: "PO Status must be Open or Closed" };
+  }
+
+  const startFrom = parseExcelDate(candidate.startFrom);
+  if (startFrom === "invalid") return { error: "Invalid start date" };
+
+  const endDate = parseExcelDate(candidate.endDate);
+  if (endDate === "invalid") return { error: "Invalid end date" };
+
+  return {
+    draft: {
+      customerPONumber,
+      customerName: revenueCellText(candidate.customerName),
+      companyName: revenueCellText(candidate.companyName),
+      vendorName: revenueCellText(candidate.vendorName),
+      poAmount: typeof poAmount === "number" ? roundMoney(poAmount) : null,
+      status: status ?? "LIVE",
+      scope: revenueCellText(candidate.scope),
+      billingPlanName: revenueCellText(candidate.billingPlanName),
+      serviceTypeName: revenueCellText(candidate.serviceTypeName),
+      contractDurationName: revenueCellText(candidate.contractDurationName),
+      contractTypeName: revenueCellText(candidate.contractTypeName),
+      poOwner: revenueCellText(candidate.poOwner),
+      paymentTerms: revenueCellText(candidate.paymentTerms),
+      purchaseOrderType: parsePurchaseOrderType(candidate.purchaseOrderType),
+      startFrom: startFrom && startFrom !== "invalid" ? startFrom : null,
+      endDate: endDate && endDate !== "invalid" ? endDate : null,
+      remark: remarkText(revenueCellText(candidate.remark)),
+    },
+  };
+}
+
+function remarkText(value: string | null | undefined) {
+  const text = (value ?? "").trim();
+  return text === "-" ? "" : text;
+}
+
+function mergeRemarks(left: string, right: string) {
+  const notes = [...new Set(`${left}; ${right}`.split(";").map((part) => part.trim()).filter(Boolean))];
+  return notes.join("; ");
+}
+
+function mergePurchaseOrderDraft(
+  current: RevenuePurchaseOrderDraft,
+  next: RevenuePurchaseOrderDraft,
+): RevenuePurchaseOrderDraft | "conflict" {
+  const merged = { ...current };
+
+  for (const key of Object.keys(merged) as Array<keyof RevenuePurchaseOrderDraft>) {
+    const left = key === "remark" ? remarkText(String(merged[key] ?? "")) : merged[key];
+    const right = key === "remark" ? remarkText(String(next[key] ?? "")) : next[key];
+    const leftEmpty = left == null || left === "";
+    const rightEmpty = right == null || right === "";
+
+    if (leftEmpty && !rightEmpty) {
+      Object.assign(merged, { [key]: right });
+    } else if (key === "remark" && !leftEmpty && !rightEmpty && left !== right) {
+      merged.remark = mergeRemarks(String(left), String(right));
+    } else if (!leftEmpty && !rightEmpty && left !== right) {
+      return "conflict";
+    }
+  }
+
+  return merged;
+}
+
+export function assessRevenueImport(
+  parsed: ParsedRevenueWorkbook,
+  context: RevenueImportContext,
+): AssessedRevenueImport {
+  if (parsed.columnErrors.length > 0) {
+    return {
+      columnErrors: parsed.columnErrors,
+      errors: [],
+      rows: [],
+      inserts: [],
+      canCommit: false,
+    };
+  }
+
+  const messages = new Map<number, string[]>();
+  const invoiceCounts = new Map<string, number>();
+
+  for (const candidate of parsed.candidates) {
+    const invoiceNumber = revenueCellText(candidate.invoiceNumber);
+    if (!invoiceNumber) continue;
+    const key = normalizeRevenueKey(invoiceNumber);
+    invoiceCounts.set(key, (invoiceCounts.get(key) ?? 0) + 1);
+  }
+
+  const rows: RevenueImportPreviewRow[] = [];
+  const inserts: RevenueImportInsert[] = [];
+  const purchaseOrderDrafts = new Map<string, RevenuePurchaseOrderDraft>();
+
+  for (const candidate of parsed.candidates) {
+    const row = candidate.excelRow;
+    const invoiceNumber = revenueCellText(candidate.invoiceNumber);
+    const customerPONumber = revenueCellText(candidate.customerPONumber);
+    const billingRemark = revenueCellText(candidate.billingRemark);
+
+    if (!invoiceNumber) {
+      pushMessage(messages, row, "Invoice Number is missing");
+    }
+
+    if (!customerPONumber) {
+      pushMessage(messages, row, "Customer PO Number is missing");
+    }
+
+    const invoiceDate = parseExcelDate(candidate.invoiceDate);
+    if (invoiceDate == null) {
+      pushMessage(messages, row, "Invoice Date is missing");
+    } else if (invoiceDate === "invalid") {
+      pushMessage(messages, row, "Invalid invoice date");
+    }
+
+    const invoiceAmount = parseExcelAmount(candidate.invoiceAmount);
+    if (invoiceAmount == null) {
+      pushMessage(messages, row, "Invoice Amount is missing");
+    } else if (invoiceAmount === "invalid") {
+      pushMessage(messages, row, "Invoice Amount must be a valid number");
+    } else if (invoiceAmount < 0) {
+      pushMessage(messages, row, "Invoice Amount cannot be negative");
+    }
+
+    const collectedAmount = parseExcelAmount(candidate.collectedAmount);
+    if (collectedAmount === "invalid") {
+      pushMessage(messages, row, "Collected Amount must be a valid number");
+    } else if (typeof collectedAmount === "number" && collectedAmount < 0) {
+      pushMessage(messages, row, "Collected Amount cannot be negative");
+    }
+
+    const tds = parseExcelAmount(candidate.tds);
+    if (tds === "invalid") {
+      pushMessage(messages, row, "TDS must be a valid number");
+    } else if (typeof tds === "number" && tds < 0) {
+      pushMessage(messages, row, "TDS cannot be negative");
+    }
+
+    const paymentText = revenueCellText(candidate.paymentReceived).toUpperCase();
+    let paymentReceived: "YES" | "NO" | null = null;
+    if (!paymentText) {
+      pushMessage(messages, row, "Payment Received is missing");
+    } else if (paymentText === "YES" || paymentText === "NO") {
+      paymentReceived = paymentText;
+    } else {
+      pushMessage(messages, row, "Payment Received must be YES or NO");
+    }
+
+    const paymentReceivedDate = parseExcelDate(candidate.paymentReceivedDate);
+    if (paymentReceivedDate === "invalid") {
+      pushMessage(messages, row, "Invalid payment received date");
+    }
+
+    const paymentDueDate = parseExcelDate(candidate.paymentDueDate);
+    if (paymentDueDate === "invalid") {
+      pushMessage(messages, row, "Invalid payment due date");
+    }
+
+    const billingSubmittedDate = parseExcelDate(candidate.billingSubmittedDate);
+    if (billingSubmittedDate === "invalid") {
+      pushMessage(messages, row, "Invalid billing submitted date");
+    }
+
+    if (invoiceNumber && (invoiceCounts.get(normalizeRevenueKey(invoiceNumber)) ?? 0) > 1) {
+      pushMessage(messages, row, "Invoice Number is duplicated in this file");
+    }
+
+    let purchaseOrderId = "";
+    let billingCycleId = "";
+    if (customerPONumber) {
+      const matches =
+        context.purchaseOrdersByNumber.get(normalizeRevenueKey(customerPONumber)) ??
+        [];
+
+      if (matches.length > 1) {
+        pushMessage(
+          messages,
+          row,
+          "Customer PO Number matches more than one revenue record",
+        );
+      } else {
+        if (matches.length === 1) purchaseOrderId = matches[0];
+
+        const read = readPurchaseOrderDraft(candidate, customerPONumber);
+        if ("error" in read) {
+          pushMessage(messages, row, read.error);
+        } else {
+          const key = normalizeRevenueKey(customerPONumber);
+          const current = purchaseOrderDrafts.get(key);
+          if (!current) {
+            purchaseOrderDrafts.set(key, read.draft);
+          } else {
+            const merged = mergePurchaseOrderDraft(current, read.draft);
+            if (merged === "conflict") {
+              pushMessage(
+                messages,
+                row,
+                "Customer PO Number has conflicting values in this file",
+              );
+            } else {
+              Object.assign(current, merged);
+            }
+          }
+        }
+      }
+    }
+
+    if (invoiceNumber) {
+      const existing =
+        context.existingInvoices.get(normalizeRevenueKey(invoiceNumber)) ?? [];
+
+      if (existing.length > 1) {
+        pushMessage(
+          messages,
+          row,
+          "Invoice Number matches more than one billing cycle",
+        );
+      } else if (existing.length === 1) {
+        billingCycleId = existing[0].id;
+        if (purchaseOrderId && existing[0].purchaseOrderId !== purchaseOrderId) {
+          pushMessage(
+            messages,
+            row,
+            "Invoice Number belongs to a different Customer PO Number",
+          );
+        } else if (!purchaseOrderId) {
+          purchaseOrderId = existing[0].purchaseOrderId;
+        }
+      }
+    }
+
+    if (messages.has(row)) continue;
+    if (!paymentReceived || invoiceDate == null || invoiceDate === "invalid") {
+      continue;
+    }
+    if (typeof invoiceAmount !== "number" || invoiceAmount < 0) continue;
+
+    const purchaseOrder =
+      purchaseOrderDrafts.get(normalizeRevenueKey(customerPONumber)) ?? null;
+    if (!purchaseOrderId && !purchaseOrder) continue;
+
+    const resolvedCollected =
+      typeof collectedAmount === "number" ? roundMoney(collectedAmount) : 0;
+    const resolvedTds = typeof tds === "number" ? roundMoney(tds) : 0;
+    const resolvedInvoiceDate = invoiceDate;
+    const resolvedSubmitted =
+      billingSubmittedDate && billingSubmittedDate !== "invalid"
+        ? billingSubmittedDate
+        : resolvedInvoiceDate;
+    const resolvedDue =
+      paymentDueDate && paymentDueDate !== "invalid"
+        ? paymentDueDate
+        : resolvedInvoiceDate;
+    const resolvedReceived =
+      paymentReceivedDate && paymentReceivedDate !== "invalid"
+        ? paymentReceivedDate
+        : null;
+
+    rows.push({
+      excelRow: row,
+      invoiceNumber,
+      customerPONumber,
+      invoiceDate: formatImportDate(resolvedInvoiceDate),
+      invoiceAmount: roundMoney(invoiceAmount),
+      collectedAmount: resolvedCollected,
+      tds: resolvedTds,
+      paymentReceived,
+      paymentReceivedDate: resolvedReceived
+        ? formatImportDate(resolvedReceived)
+        : "",
+      paymentDueDate: formatImportDate(resolvedDue),
+      billingSubmittedDate: formatImportDate(resolvedSubmitted),
+      billingRemark,
+    });
+
+    inserts.push({
+      excelRow: row,
+      purchaseOrderId,
+      purchaseOrder,
+      billingCycleId,
+      invoiceNumber,
+      invoiceDate: resolvedInvoiceDate,
+      invoiceAmount: roundMoney(invoiceAmount),
+      collectedAmount: resolvedCollected,
+      tds: resolvedTds,
+      paymentReceived,
+      paymentReceivedDate: resolvedReceived,
+      paymentDueDate: resolvedDue,
+      billingSubmittedDate: resolvedSubmitted,
+      billingRemark,
+    });
+  }
+
+  const errors = Array.from(messages.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([rowNumber, rowMessages]) => ({
+      row: rowNumber,
+      messages: rowMessages,
+    }));
+
+  return {
+    columnErrors: [],
+    errors,
+    rows,
+    inserts,
+    canCommit: errors.length === 0 && inserts.length > 0,
+  };
+}
+
+function flattenExportRows(purchaseOrders: RevenueExportPurchaseOrder[]) {
+  return purchaseOrders.flatMap((purchaseOrder) => {
+    const shared = {
+      "Customer PO Number": purchaseOrder.customerPONumber ?? "",
+      Customer: purchaseOrder.customerName ?? "",
+      Company: purchaseOrder.companyName ?? "",
+      Vendor: purchaseOrder.vendorName ?? "",
+      "PO Amount": exportAmount(purchaseOrder.poAmount, purchaseOrder.poAmount != null),
+      "PO Status": purchaseOrder.status ?? "",
+      "Scope Of Work": purchaseOrder.scope ?? "",
+      "Billing Plan": purchaseOrder.billingPlanName ?? "",
+      "Service Type": purchaseOrder.serviceTypeName ?? "",
+      "Contract Duration": purchaseOrder.contractDurationName ?? "",
+      "Contract Type": purchaseOrder.contractTypeName ?? "",
+      "PO Owner": purchaseOrder.poOwner ?? "",
+      "Payment Terms": purchaseOrder.paymentTerms ?? "",
+      "Purchase Order Type": purchaseOrder.purchaseOrderType ?? "",
+      "Start Date": exportDate(purchaseOrder.startFrom),
+      "End Date": exportDate(purchaseOrder.endDate),
+      Remark: purchaseOrder.remark ?? "",
+    };
+
+    const cycles = [...(purchaseOrder.billingCycles ?? [])].sort((left, right) => {
+      const leftTime = new Date(
+        left.invoiceDate ?? left.billingSubmittedDate ?? 0,
+      ).getTime();
+      const rightTime = new Date(
+        right.invoiceDate ?? right.billingSubmittedDate ?? 0,
+      ).getTime();
+      return (Number.isNaN(leftTime) ? 0 : leftTime) -
+        (Number.isNaN(rightTime) ? 0 : rightTime);
+    });
+
+    if (cycles.length === 0) {
+      return [
+        {
+          ...shared,
+          "Invoice Number": "",
+          "Invoice Date": "",
+          "Invoice Amount": "",
+          "Collected Amount": "",
+          TDS: "",
+          "Payment Received": "",
+          "Payment Received Date": "",
+          "Payment Due Date": "",
+          "Billing Submitted Date": "",
+          "Billing Remark": "",
+        },
+      ];
+    }
+
+    return cycles.map((cycle) => ({
+      ...shared,
+      "Invoice Number": cycle.invoiceNumber ?? "",
+      "Invoice Date": exportDate(cycle.invoiceDate),
+      "Invoice Amount": exportAmount(cycle.invoiceAmount, true),
+      "Collected Amount": exportAmount(cycle.collectedAmount, true),
+      TDS: exportAmount(cycle.tds, true),
+      "Payment Received": cycle.paymentReceived ?? "",
+      "Payment Received Date": exportDate(cycle.paymentReceivedDate),
+      "Payment Due Date": exportDate(cycle.paymentDueDate),
+      "Billing Submitted Date": exportDate(cycle.billingSubmittedDate),
+      "Billing Remark": cycle.billingRemark ?? "",
+    }));
+  });
+}
+
+export function buildRevenueWorkbook(purchaseOrders: RevenueExportPurchaseOrder[]) {
+  const headers = REVENUE_EXCEL_COLUMNS.map((column) => column.header);
+  const records = flattenExportRows(purchaseOrders);
+  const body = records.map((record) =>
+    headers.map((header) => record[header as keyof typeof record] ?? ""),
+  );
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...body]);
+  sheet["!cols"] = headers.map((header) => ({
+    wch: Math.max(header.length + 2, 18),
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Revenue");
+
+  return Buffer.from(
+    XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "buffer",
+    }),
+  );
+}

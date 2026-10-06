@@ -42,7 +42,30 @@ async function main() {
 
     console.log("Modules seeded");
 
-    const password = await bcrypt.hash("admin123", 10)
+    const isProduction = process.env.APP_ENV === "production";
+    const username =
+        process.env.SEED_ADMIN_USERNAME?.trim() ||
+        (isProduction ? "" : "admin");
+    const plainPassword =
+        process.env.SEED_ADMIN_PASSWORD?.trim() ||
+        (isProduction ? "" : "admin123");
+    const email =
+        process.env.SEED_ADMIN_EMAIL?.trim() ||
+        (isProduction ? "" : "admin@example.com");
+
+    if (!username || !plainPassword || !email) {
+        throw new Error(
+            "Set SEED_ADMIN_USERNAME, SEED_ADMIN_PASSWORD, and SEED_ADMIN_EMAIL before seeding this instance.",
+        );
+    }
+
+    if (isProduction && plainPassword === "admin123") {
+        throw new Error(
+            "Production seed cannot use the development password.",
+        );
+    }
+
+    const password = await bcrypt.hash(plainPassword, 10);
 
     const adminRole = await prisma.role.upsert({
         where: { name: "Admin" },
@@ -75,18 +98,29 @@ async function main() {
     }
 
     await prisma.user.upsert({
-        where: { email: "admin@example.com" },
-        update: {},
-        create: {
-            username: "admin",
-            password: password,
+        where: { email },
+        update: {
+            username,
+            password,
             firstName: "Admin",
-            lastName: "Admin",
-            email: "admin@example.com",
+            lastName: isProduction ? "Production" : "Admin",
+            status: Status.ACTIVE,
+            roleId: adminRole.id,
+        },
+        create: {
+            username,
+            password,
+            firstName: "Admin",
+            lastName: isProduction ? "Production" : "Admin",
+            email,
             status: Status.ACTIVE,
             roleId: adminRole.id,
         }
     })
+
+    console.log(
+        `Seeded ${isProduction ? "production" : "development"} admin username: ${username}`,
+    );
 
     const customers = [
         {
