@@ -194,11 +194,17 @@ export function RevenueExcelActions({
             <Input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="h-11 text-slate-900 file:mr-3 file:text-slate-900"
               onChange={(event) => {
                 setFile(event.target.files?.[0] ?? null);
                 setPreview(null);
               }}
             />
+            {file ? (
+              <p className="text-sm font-medium text-slate-800">
+                Selected file: {file.name}
+              </p>
+            ) : null}
 
             {preview ? (
               <div className="space-y-4">
@@ -243,6 +249,7 @@ export function RevenueExcelActions({
                           <tr>
                             <th className="px-3 py-2">Row</th>
                             <th className="px-3 py-2">Invoice Number</th>
+                            <th className="px-3 py-2">Customer</th>
                             <th className="px-3 py-2">Customer PO Number</th>
                             <th className="px-3 py-2">Invoice Date</th>
                             <th className="px-3 py-2">Invoice Amount</th>
@@ -255,6 +262,7 @@ export function RevenueExcelActions({
                             <tr key={row.excelRow} className="border-t">
                               <td className="px-3 py-2">{row.excelRow}</td>
                               <td className="px-3 py-2">{row.invoiceNumber}</td>
+                              <td className="px-3 py-2">{row.customerName || "-"}</td>
                               <td className="px-3 py-2">{row.customerPONumber}</td>
                               <td className="px-3 py-2">{row.invoiceDate}</td>
                               <td className="px-3 py-2">{row.invoiceAmount}</td>

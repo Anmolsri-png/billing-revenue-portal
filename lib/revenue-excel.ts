@@ -25,7 +25,13 @@ export const REVENUE_EXCEL_COLUMNS: RevenueColumn[] = [
     kind: "text",
     aliases: ["PO Number"],
   },
-  { header: "Customer", key: "customerName", required: false, kind: "text" },
+  {
+    header: "Customer",
+    key: "customerName",
+    required: false,
+    kind: "text",
+    aliases: ["Customer Name"],
+  },
   { header: "Company", key: "companyName", required: false, kind: "text" },
   { header: "Vendor", key: "vendorName", required: false, kind: "text" },
   { header: "Invoice Date", key: "invoiceDate", required: true, kind: "date" },
@@ -103,6 +109,7 @@ export type RevenueImportPreviewRow = {
   excelRow: number;
   invoiceNumber: string;
   customerPONumber: string;
+  customerName: string;
   invoiceDate: string;
   invoiceAmount: number;
   collectedAmount: number;
@@ -822,6 +829,7 @@ export function assessRevenueImport(
       excelRow: row,
       invoiceNumber,
       customerPONumber,
+      customerName: revenueCellText(candidate.customerName),
       invoiceDate: formatImportDate(resolvedInvoiceDate),
       invoiceAmount: roundMoney(invoiceAmount),
       collectedAmount: resolvedCollected,
