@@ -1,8 +1,12 @@
 import { getProjects } from "@/lib/actions/project";
 import { getCompanys } from "@/lib/actions/company";
 import { getCustomers } from "@/lib/actions/customer";
+import { canonicalCustomerName } from "@/lib/customer-names";
+import { canonicalCompanyName } from "@/lib/company-names";
 import { PLDashboardComponent } from "@/components/pl/pl-dashboard-component";
 import PurchaseOrderDashboard from "@/components/purchase-order/purchase-order-dashboard";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({
   searchParams,
@@ -14,21 +18,25 @@ export default async function DashboardPage({
   const projects = await getProjects();
   const companies = await getCompanys();
   const customers = await getCustomers();
-  const customerOptions = customers.map((customer) => {
-    const fullName = [customer.firstName, customer.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
+  const customerOptions = customers
+    .map((customer) => {
+      const fullName = [customer.firstName, customer.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
 
-    return {
-      id: customer.id,
-      name:
-        customer.companyName?.trim() ||
-        fullName ||
-        customer.customerCode ||
-        "-",
-    };
-  });
+      return {
+        id: customer.id,
+        name: canonicalCustomerName(
+          customer.companyName?.trim() ||
+            fullName ||
+            customer.customerCode ||
+            "",
+        ),
+      };
+    })
+    .filter((customer) => customer.name)
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   const currentTab =
     activeTab === "revenue" ? "revenue" : "pl";
@@ -36,7 +44,12 @@ export default async function DashboardPage({
   if (currentTab === "revenue") {
     return (
       <PurchaseOrderDashboard
-        companies={JSON.parse(JSON.stringify(companies))}
+        companies={companies
+          .map((company) => ({
+            id: company.id,
+            name: canonicalCompanyName(company.name),
+          }))
+          .sort((left, right) => left.name.localeCompare(right.name))}
         customers={JSON.parse(JSON.stringify(customerOptions))}
       />
     );

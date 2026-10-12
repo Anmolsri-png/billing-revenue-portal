@@ -370,6 +370,13 @@ const PurchaseOrderDashboard = ({
   };
 
   useEffect(() => {
+    if (filters.customer === "all") return;
+    if (customers.some((customer) => customer.id === filters.customer)) return;
+
+    setFilters((current) => ({ ...current, customer: "all" }));
+  }, [customers, filters.customer]);
+
+  useEffect(() => {
     let active = true;
 
     async function loadRevenueDetails() {

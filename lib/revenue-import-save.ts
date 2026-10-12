@@ -6,6 +6,8 @@ import {
 } from "@prisma/client";
 
 import { toBusinessDateValue } from "@/lib/date-utils";
+import { canonicalCustomerName, normalizeCustomerKey } from "@/lib/customer-names";
+import { canonicalCompanyName, normalizeCompanyKey } from "@/lib/company-names";
 import {
   normalizeRevenueKey,
   type AssessedRevenueImport,
@@ -78,6 +80,20 @@ export async function persistRevenueImport(
   db: ImportDb,
   assessed: AssessedRevenueImport,
 ) {
+  for (const row of assessed.inserts) {
+    if (!row.purchaseOrder) continue;
+    if (row.purchaseOrder.customerName) {
+      row.purchaseOrder.customerName = canonicalCustomerName(
+        row.purchaseOrder.customerName,
+      );
+    }
+    if (row.purchaseOrder.companyName) {
+      row.purchaseOrder.companyName = canonicalCompanyName(
+        row.purchaseOrder.companyName,
+      );
+    }
+  }
+
   const drafts = new Map<string, RevenuePurchaseOrderDraft>();
   const purchaseOrderUpdates = new Map<string, RevenuePurchaseOrderDraft>();
 
@@ -115,21 +131,28 @@ export async function persistRevenueImport(
   const customerCodes = customers.map((customer) => customer.customerCode);
   for (const customer of customers) {
     for (const name of [customer.companyName, customer.firstName]) {
-      const key = normalizeRevenueKey(name ?? "");
-      if (key && !customerIds.has(key)) customerIds.set(key, customer.id);
+      const canonical = canonicalCustomerName(name ?? "");
+      const key = normalizeRevenueKey(canonical);
+      if (!key) continue;
+      const alreadyCanonical =
+        normalizeCustomerKey(name ?? "") === normalizeCustomerKey(canonical);
+      if (!customerIds.has(key) || alreadyCanonical) {
+        customerIds.set(key, customer.id);
+      }
     }
   }
 
   for (const name of customerNames) {
-    const key = normalizeRevenueKey(name);
+    const canonical = canonicalCustomerName(name);
+    const key = normalizeRevenueKey(canonical);
     if (!key || customerIds.has(key)) continue;
     const code = nextCode("CUST", customerCodes);
     customerCodes.push(code);
     const created = await db.customer.create({
       data: {
         customerCode: code,
-        firstName: name,
-        companyName: name,
+        firstName: canonical,
+        companyName: canonical,
         phone: "-",
       },
     });
@@ -161,14 +184,30 @@ export async function persistRevenueImport(
     vendorIds.set(key, created.id);
   }
 
-  const companyIds = await resolveNamedId(
-    companyNames,
-    async () =>
-      (await db.company.findMany({ select: { id: true, name: true } })).map(
-        (company) => ({ id: company.id, name: company.name }),
-      ),
-    (name) => db.company.create({ data: { name } }),
-  );
+  const companyRecords = await db.company.findMany({
+    select: { id: true, name: true },
+  });
+  const companyIds = new Map<string, string>();
+
+  for (const company of companyRecords) {
+    const canonical = canonicalCompanyName(company.name);
+    const key = normalizeRevenueKey(canonical);
+    if (!key) continue;
+    const alreadyCanonical =
+      normalizeCompanyKey(company.name) === normalizeCompanyKey(canonical);
+    if (!companyIds.has(key) || alreadyCanonical) {
+      companyIds.set(key, company.id);
+    }
+  }
+
+  for (const name of companyNames) {
+    const canonical = canonicalCompanyName(name);
+    const key = normalizeRevenueKey(canonical);
+    if (!key || companyIds.has(key)) continue;
+    const created = await db.company.create({ data: { name: canonical } });
+    companyIds.set(key, created.id);
+  }
+
   const planIds = await resolveNamedId(
     planNames,
     async () =>
@@ -268,20 +307,18 @@ export async function persistRevenueImport(
       throw new Error(`Row ${row.excelRow} has no revenue record to update`);
     }
 
-    const invoiceDate = toBusinessDateValue(row.invoiceDate);
-    const billingSubmittedDate = toBusinessDateValue(row.billingSubmittedDate);
-    const paymentDueDate = toBusinessDateValue(row.paymentDueDate);
+    const invoiceDate = row.invoiceDate
+      ? toBusinessDateValue(row.invoiceDate)
+      : null;
+    const billingSubmittedDate = row.billingSubmittedDate
+      ? toBusinessDateValue(row.billingSubmittedDate)
+      : null;
+    const paymentDueDate = row.paymentDueDate
+      ? toBusinessDateValue(row.paymentDueDate)
+      : null;
     const paymentReceivedDate = row.paymentReceivedDate
       ? toBusinessDateValue(row.paymentReceivedDate)
       : null;
-
-    if (!invoiceDate || !billingSubmittedDate || !paymentDueDate) {
-      throw new Error(`Row ${row.excelRow} has an invalid date`);
-    }
-
-    if (row.paymentReceivedDate && !paymentReceivedDate) {
-      throw new Error(`Row ${row.excelRow} has an invalid payment received date`);
-    }
 
     const cycleData = {
       purchaseOrderId,

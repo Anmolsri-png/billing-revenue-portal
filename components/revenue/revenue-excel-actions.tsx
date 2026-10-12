@@ -109,7 +109,7 @@ export function RevenueExcelActions({
   };
 
   const commitFile = () => {
-    if (!file || !preview?.canCommit) return;
+    if (!file) return;
 
     const formData = new FormData();
     formData.append("file", file);
@@ -170,8 +170,8 @@ export function RevenueExcelActions({
             <DialogDescription>
               Invoice numbers that already exist are updated from the file.
               Customer PO Numbers that are not already in the database are
-              created as new revenue records. Nothing is deleted, and nothing
-              is saved while the file has errors.
+              created as new revenue records. Nothing is deleted. Validation
+              is turned off for now.
             </DialogDescription>
           </DialogHeader>
 
@@ -292,7 +292,8 @@ export function RevenueExcelActions({
               type="button"
               variant="outline"
               onClick={validateFile}
-              disabled={isImporting || !file}
+              disabled
+              title="Validation is turned off for now"
             >
               Validate
             </Button>
@@ -300,7 +301,7 @@ export function RevenueExcelActions({
               type="button"
               className="bg-teal-600 text-white hover:bg-teal-700"
               onClick={commitFile}
-              disabled={isImporting || !preview?.canCommit}
+              disabled={isImporting || !file}
             >
               Import records
             </Button>

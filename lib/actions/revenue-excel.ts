@@ -295,29 +295,35 @@ export async function commitRevenueImport(
       async (tx) => {
         const assessed = await assessUpload(buffer, tx);
 
-        if (!assessed.canCommit || assessed.inserts.length === 0) {
+        if (assessed.inserts.length === 0) {
           throw new ImportRejected(assessed);
         }
 
-        return persistRevenueImport(tx, assessed);
+        const saved = await persistRevenueImport(tx, assessed);
+        return { saved, skippedRows: assessed.errors.length };
       },
       { timeout: 60000 },
     );
 
+    const { saved, skippedRows } = importedCount;
+
     return {
       success: true,
       message: [
-        importedCount.billingCyclesCreated
-          ? `Imported ${importedCount.billingCyclesCreated} billing cycle${importedCount.billingCyclesCreated === 1 ? "" : "s"}`
+        saved.billingCyclesCreated
+          ? `Imported ${saved.billingCyclesCreated} billing cycle${saved.billingCyclesCreated === 1 ? "" : "s"}`
           : "",
-        importedCount.billingCyclesUpdated
-          ? `updated ${importedCount.billingCyclesUpdated} billing cycle${importedCount.billingCyclesUpdated === 1 ? "" : "s"}`
+        saved.billingCyclesUpdated
+          ? `updated ${saved.billingCyclesUpdated} billing cycle${saved.billingCyclesUpdated === 1 ? "" : "s"}`
           : "",
-        importedCount.purchaseOrdersCreated
-          ? `created ${importedCount.purchaseOrdersCreated} revenue record${importedCount.purchaseOrdersCreated === 1 ? "" : "s"}`
+        saved.purchaseOrdersCreated
+          ? `created ${saved.purchaseOrdersCreated} revenue record${saved.purchaseOrdersCreated === 1 ? "" : "s"}`
           : "",
-        importedCount.purchaseOrdersUpdated
-          ? `updated ${importedCount.purchaseOrdersUpdated} revenue record${importedCount.purchaseOrdersUpdated === 1 ? "" : "s"}`
+        saved.purchaseOrdersUpdated
+          ? `updated ${saved.purchaseOrdersUpdated} revenue record${saved.purchaseOrdersUpdated === 1 ? "" : "s"}`
+          : "",
+        skippedRows
+          ? `skipped ${skippedRows} row${skippedRows === 1 ? "" : "s"} that could not be read`
           : "",
       ]
         .filter(Boolean)
@@ -328,14 +334,14 @@ export async function commitRevenueImport(
       rows: [],
       canCommit: false,
       importedCount:
-        importedCount.billingCyclesCreated + importedCount.billingCyclesUpdated,
+        saved.billingCyclesCreated + saved.billingCyclesUpdated,
     };
   } catch (error) {
     if (error instanceof ImportRejected) {
       return {
         ...toImportResult(error.assessed),
         success: false,
-        message: "Import was not saved because the file has validation errors.",
+        message: "Import was not saved because no rows could be read from the file.",
       };
     }
 

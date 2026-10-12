@@ -353,16 +353,6 @@ function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function pushMessage(
-  messages: Map<number, string[]>,
-  row: number,
-  message: string,
-) {
-  const current = messages.get(row) ?? [];
-  current.push(message);
-  messages.set(row, current);
-}
-
 export function readRevenueWorkbookMatrix(buffer: Buffer) {
   if (
     !Buffer.isBuffer(buffer) ||
@@ -553,49 +543,41 @@ function parsePurchaseOrderType(
   return null;
 }
 
+function usableDate(value: ParsedDate) {
+  return typeof value === "string" ? value : null;
+}
+
+function usableAmount(value: ParsedAmount) {
+  return typeof value === "number" ? roundMoney(value) : 0;
+}
+
 function readPurchaseOrderDraft(
   candidate: RevenueImportCandidate,
   customerPONumber: string,
-): { draft: RevenuePurchaseOrderDraft } | { error: string } {
+): RevenuePurchaseOrderDraft {
   const poAmount = parseExcelAmount(candidate.poAmount);
-  if (poAmount === "invalid") {
-    return { error: "PO Amount must be a valid number" };
-  }
-  if (typeof poAmount === "number" && poAmount < 0) {
-    return { error: "PO Amount cannot be negative" };
-  }
-
   const status = parsePoStatus(candidate.poStatus);
-  if (status === "invalid") {
-    return { error: "PO Status must be Open or Closed" };
-  }
-
   const startFrom = parseExcelDate(candidate.startFrom);
-  if (startFrom === "invalid") return { error: "Invalid start date" };
-
   const endDate = parseExcelDate(candidate.endDate);
-  if (endDate === "invalid") return { error: "Invalid end date" };
 
   return {
-    draft: {
-      customerPONumber,
-      customerName: revenueCellText(candidate.customerName),
-      companyName: revenueCellText(candidate.companyName),
-      vendorName: revenueCellText(candidate.vendorName),
-      poAmount: typeof poAmount === "number" ? roundMoney(poAmount) : null,
-      status: status ?? "LIVE",
-      scope: revenueCellText(candidate.scope),
-      billingPlanName: revenueCellText(candidate.billingPlanName),
-      serviceTypeName: revenueCellText(candidate.serviceTypeName),
-      contractDurationName: revenueCellText(candidate.contractDurationName),
-      contractTypeName: revenueCellText(candidate.contractTypeName),
-      poOwner: revenueCellText(candidate.poOwner),
-      paymentTerms: revenueCellText(candidate.paymentTerms),
-      purchaseOrderType: parsePurchaseOrderType(candidate.purchaseOrderType),
-      startFrom: startFrom && startFrom !== "invalid" ? startFrom : null,
-      endDate: endDate && endDate !== "invalid" ? endDate : null,
-      remark: remarkText(revenueCellText(candidate.remark)),
-    },
+    customerPONumber,
+    customerName: revenueCellText(candidate.customerName),
+    companyName: revenueCellText(candidate.companyName),
+    vendorName: revenueCellText(candidate.vendorName),
+    poAmount: typeof poAmount === "number" ? roundMoney(poAmount) : null,
+    status: status && status !== "invalid" ? status : "LIVE",
+    scope: revenueCellText(candidate.scope),
+    billingPlanName: revenueCellText(candidate.billingPlanName),
+    serviceTypeName: revenueCellText(candidate.serviceTypeName),
+    contractDurationName: revenueCellText(candidate.contractDurationName),
+    contractTypeName: revenueCellText(candidate.contractTypeName),
+    poOwner: revenueCellText(candidate.poOwner),
+    paymentTerms: revenueCellText(candidate.paymentTerms),
+    purchaseOrderType: parsePurchaseOrderType(candidate.purchaseOrderType),
+    startFrom: usableDate(startFrom),
+    endDate: usableDate(endDate),
+    remark: remarkText(revenueCellText(candidate.remark)),
   };
 }
 
@@ -612,7 +594,7 @@ function mergeRemarks(left: string, right: string) {
 function mergePurchaseOrderDraft(
   current: RevenuePurchaseOrderDraft,
   next: RevenuePurchaseOrderDraft,
-): RevenuePurchaseOrderDraft | "conflict" {
+): RevenuePurchaseOrderDraft {
   const merged = { ...current };
 
   for (const key of Object.keys(merged) as Array<keyof RevenuePurchaseOrderDraft>) {
@@ -626,7 +608,7 @@ function mergePurchaseOrderDraft(
     } else if (key === "remark" && !leftEmpty && !rightEmpty && left !== right) {
       merged.remark = mergeRemarks(String(left), String(right));
     } else if (!leftEmpty && !rightEmpty && left !== right) {
-      return "conflict";
+      continue;
     }
   }
 
@@ -647,199 +629,87 @@ export function assessRevenueImport(
     };
   }
 
-  const messages = new Map<number, string[]>();
-  const invoiceCounts = new Map<string, number>();
-
-  for (const candidate of parsed.candidates) {
-    const invoiceNumber = revenueCellText(candidate.invoiceNumber);
-    if (!invoiceNumber) continue;
-    const key = normalizeRevenueKey(invoiceNumber);
-    invoiceCounts.set(key, (invoiceCounts.get(key) ?? 0) + 1);
-  }
-
   const rows: RevenueImportPreviewRow[] = [];
   const inserts: RevenueImportInsert[] = [];
   const purchaseOrderDrafts = new Map<string, RevenuePurchaseOrderDraft>();
 
   for (const candidate of parsed.candidates) {
     const row = candidate.excelRow;
-    const invoiceNumber = revenueCellText(candidate.invoiceNumber);
-    const customerPONumber = revenueCellText(candidate.customerPONumber);
+    const invoiceNumber =
+      revenueCellText(candidate.invoiceNumber) || `ROW-${row}`;
+    const customerName = revenueCellText(candidate.customerName);
+    const customerPONumber =
+      revenueCellText(candidate.customerPONumber) ||
+      `NO-PO-${normalizeRevenueKey(customerName) || invoiceNumber}`;
     const billingRemark = revenueCellText(candidate.billingRemark);
-
-    if (!invoiceNumber) {
-      pushMessage(messages, row, "Invoice Number is missing");
-    }
-
-    if (!customerPONumber) {
-      pushMessage(messages, row, "Customer PO Number is missing");
-    }
-
-    const invoiceDate = parseExcelDate(candidate.invoiceDate);
-    if (invoiceDate == null) {
-      pushMessage(messages, row, "Invoice Date is missing");
-    } else if (invoiceDate === "invalid") {
-      pushMessage(messages, row, "Invalid invoice date");
-    }
-
-    const invoiceAmount = parseExcelAmount(candidate.invoiceAmount);
-    if (invoiceAmount == null) {
-      pushMessage(messages, row, "Invoice Amount is missing");
-    } else if (invoiceAmount === "invalid") {
-      pushMessage(messages, row, "Invoice Amount must be a valid number");
-    } else if (invoiceAmount < 0) {
-      pushMessage(messages, row, "Invoice Amount cannot be negative");
-    }
-
-    const collectedAmount = parseExcelAmount(candidate.collectedAmount);
-    if (collectedAmount === "invalid") {
-      pushMessage(messages, row, "Collected Amount must be a valid number");
-    } else if (typeof collectedAmount === "number" && collectedAmount < 0) {
-      pushMessage(messages, row, "Collected Amount cannot be negative");
-    }
-
-    const tds = parseExcelAmount(candidate.tds);
-    if (tds === "invalid") {
-      pushMessage(messages, row, "TDS must be a valid number");
-    } else if (typeof tds === "number" && tds < 0) {
-      pushMessage(messages, row, "TDS cannot be negative");
-    }
-
     const paymentText = revenueCellText(candidate.paymentReceived).toUpperCase();
-    let paymentReceived: "YES" | "NO" | null = null;
-    if (!paymentText) {
-      pushMessage(messages, row, "Payment Received is missing");
-    } else if (paymentText === "YES" || paymentText === "NO") {
-      paymentReceived = paymentText;
-    } else {
-      pushMessage(messages, row, "Payment Received must be YES or NO");
-    }
-
-    const paymentReceivedDate = parseExcelDate(candidate.paymentReceivedDate);
-    if (paymentReceivedDate === "invalid") {
-      pushMessage(messages, row, "Invalid payment received date");
-    }
-
-    const paymentDueDate = parseExcelDate(candidate.paymentDueDate);
-    if (paymentDueDate === "invalid") {
-      pushMessage(messages, row, "Invalid payment due date");
-    }
-
-    const billingSubmittedDate = parseExcelDate(candidate.billingSubmittedDate);
-    if (billingSubmittedDate === "invalid") {
-      pushMessage(messages, row, "Invalid billing submitted date");
-    }
-
-    if (invoiceNumber && (invoiceCounts.get(normalizeRevenueKey(invoiceNumber)) ?? 0) > 1) {
-      pushMessage(messages, row, "Invoice Number is duplicated in this file");
-    }
+    const paymentReceived: "YES" | "NO" =
+      paymentText === "YES" || paymentText === "NO" ? paymentText : "NO";
+    const invoiceDate = usableDate(parseExcelDate(candidate.invoiceDate));
+    const paymentReceivedDate = usableDate(
+      parseExcelDate(candidate.paymentReceivedDate),
+    );
+    const paymentDueDate = usableDate(parseExcelDate(candidate.paymentDueDate));
+    const billingSubmittedDate = usableDate(
+      parseExcelDate(candidate.billingSubmittedDate),
+    );
+    const invoiceAmount = usableAmount(parseExcelAmount(candidate.invoiceAmount));
+    const collectedAmount = usableAmount(
+      parseExcelAmount(candidate.collectedAmount),
+    );
+    const tds = usableAmount(parseExcelAmount(candidate.tds));
 
     let purchaseOrderId = "";
     let billingCycleId = "";
-    if (customerPONumber) {
-      const matches =
-        context.purchaseOrdersByNumber.get(normalizeRevenueKey(customerPONumber)) ??
-        [];
+    const matches =
+      context.purchaseOrdersByNumber.get(normalizeRevenueKey(customerPONumber)) ??
+      [];
 
-      if (matches.length > 1) {
-        pushMessage(
-          messages,
-          row,
-          "Customer PO Number matches more than one revenue record",
-        );
-      } else {
-        if (matches.length === 1) purchaseOrderId = matches[0];
+    if (matches.length > 0) purchaseOrderId = matches[0];
 
-        const read = readPurchaseOrderDraft(candidate, customerPONumber);
-        if ("error" in read) {
-          pushMessage(messages, row, read.error);
-        } else {
-          const key = normalizeRevenueKey(customerPONumber);
-          const current = purchaseOrderDrafts.get(key);
-          if (!current) {
-            purchaseOrderDrafts.set(key, read.draft);
-          } else {
-            const merged = mergePurchaseOrderDraft(current, read.draft);
-            if (merged === "conflict") {
-              pushMessage(
-                messages,
-                row,
-                "Customer PO Number has conflicting values in this file",
-              );
-            } else {
-              Object.assign(current, merged);
-            }
-          }
-        }
-      }
+    const draft = readPurchaseOrderDraft(candidate, customerPONumber);
+    const key = normalizeRevenueKey(customerPONumber);
+    const current = purchaseOrderDrafts.get(key);
+    if (!current) {
+      purchaseOrderDrafts.set(key, draft);
+    } else {
+      Object.assign(current, mergePurchaseOrderDraft(current, draft));
     }
 
     if (invoiceNumber) {
       const existing =
         context.existingInvoices.get(normalizeRevenueKey(invoiceNumber)) ?? [];
 
-      if (existing.length > 1) {
-        pushMessage(
-          messages,
-          row,
-          "Invoice Number matches more than one billing cycle",
-        );
-      } else if (existing.length === 1) {
+      if (existing.length > 0) {
         billingCycleId = existing[0].id;
-        if (purchaseOrderId && existing[0].purchaseOrderId !== purchaseOrderId) {
-          pushMessage(
-            messages,
-            row,
-            "Invoice Number belongs to a different Customer PO Number",
-          );
-        } else if (!purchaseOrderId) {
-          purchaseOrderId = existing[0].purchaseOrderId;
-        }
+        if (!purchaseOrderId) purchaseOrderId = existing[0].purchaseOrderId;
       }
     }
 
-    if (messages.has(row)) continue;
-    if (!paymentReceived || invoiceDate == null || invoiceDate === "invalid") {
-      continue;
-    }
-    if (typeof invoiceAmount !== "number" || invoiceAmount < 0) continue;
-
-    const purchaseOrder =
-      purchaseOrderDrafts.get(normalizeRevenueKey(customerPONumber)) ?? null;
-    if (!purchaseOrderId && !purchaseOrder) continue;
-
-    const resolvedCollected =
-      typeof collectedAmount === "number" ? roundMoney(collectedAmount) : 0;
-    const resolvedTds = typeof tds === "number" ? roundMoney(tds) : 0;
-    const resolvedInvoiceDate = invoiceDate;
-    const resolvedSubmitted =
-      billingSubmittedDate && billingSubmittedDate !== "invalid"
-        ? billingSubmittedDate
-        : resolvedInvoiceDate;
-    const resolvedDue =
-      paymentDueDate && paymentDueDate !== "invalid"
-        ? paymentDueDate
-        : resolvedInvoiceDate;
-    const resolvedReceived =
-      paymentReceivedDate && paymentReceivedDate !== "invalid"
-        ? paymentReceivedDate
-        : null;
+    const purchaseOrder = purchaseOrderDrafts.get(key) ?? null;
+    const resolvedInvoiceDate = invoiceDate ?? "";
+    const resolvedSubmitted = billingSubmittedDate ?? resolvedInvoiceDate;
+    const resolvedDue = paymentDueDate ?? resolvedInvoiceDate;
 
     rows.push({
       excelRow: row,
       invoiceNumber,
       customerPONumber,
-      customerName: revenueCellText(candidate.customerName),
-      invoiceDate: formatImportDate(resolvedInvoiceDate),
-      invoiceAmount: roundMoney(invoiceAmount),
-      collectedAmount: resolvedCollected,
-      tds: resolvedTds,
-      paymentReceived,
-      paymentReceivedDate: resolvedReceived
-        ? formatImportDate(resolvedReceived)
+      customerName,
+      invoiceDate: resolvedInvoiceDate
+        ? formatImportDate(resolvedInvoiceDate)
         : "",
-      paymentDueDate: formatImportDate(resolvedDue),
-      billingSubmittedDate: formatImportDate(resolvedSubmitted),
+      invoiceAmount,
+      collectedAmount,
+      tds,
+      paymentReceived,
+      paymentReceivedDate: paymentReceivedDate
+        ? formatImportDate(paymentReceivedDate)
+        : "",
+      paymentDueDate: resolvedDue ? formatImportDate(resolvedDue) : "",
+      billingSubmittedDate: resolvedSubmitted
+        ? formatImportDate(resolvedSubmitted)
+        : "",
       billingRemark,
     });
 
@@ -850,30 +720,23 @@ export function assessRevenueImport(
       billingCycleId,
       invoiceNumber,
       invoiceDate: resolvedInvoiceDate,
-      invoiceAmount: roundMoney(invoiceAmount),
-      collectedAmount: resolvedCollected,
-      tds: resolvedTds,
+      invoiceAmount,
+      collectedAmount,
+      tds,
       paymentReceived,
-      paymentReceivedDate: resolvedReceived,
+      paymentReceivedDate,
       paymentDueDate: resolvedDue,
       billingSubmittedDate: resolvedSubmitted,
       billingRemark,
     });
   }
 
-  const errors = Array.from(messages.entries())
-    .sort((left, right) => left[0] - right[0])
-    .map(([rowNumber, rowMessages]) => ({
-      row: rowNumber,
-      messages: rowMessages,
-    }));
-
   return {
     columnErrors: [],
-    errors,
+    errors: [],
     rows,
     inserts,
-    canCommit: errors.length === 0 && inserts.length > 0,
+    canCommit: inserts.length > 0,
   };
 }
 

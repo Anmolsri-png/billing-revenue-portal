@@ -281,26 +281,31 @@ function getPaymentDate(
 function hasPaymentChartRecord(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
-    "paymentReceived" | "paymentReceivedDate"
+    "collectedAmount"
   >,
 ) {
-  return (
-    cycle.paymentReceived === PaymentReceived.YES &&
-    Boolean(cycle.paymentReceivedDate)
-  );
+  return Number(cycle.collectedAmount || 0) > 0;
 }
 
 function getPaymentChartDate(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
-    "paymentReceived" | "paymentReceivedDate"
+    | "paymentReceivedDate"
+    | "invoiceDate"
+    | "billingSubmittedDate"
+    | "collectedAmount"
   >,
 ): Date | null {
   if (!hasPaymentChartRecord(cycle)) {
     return null;
   }
 
-  return cycle.paymentReceivedDate ?? null;
+  return (
+    cycle.paymentReceivedDate ??
+    cycle.invoiceDate ??
+    cycle.billingSubmittedDate ??
+    null
+  );
 }
 
 function getEffectiveCollectedAmount(
