@@ -66,6 +66,10 @@ export default function RevenueDataTable({
 }: RevenueDataTableProps) {
   const [tableData, setTableData] = React.useState(data)
 
+  React.useEffect(() => {
+    setTableData(data)
+  }, [data])
+
   const deleteHandler = async (id: string) => {
     const res = await deletePurchaseOrder(id)
 

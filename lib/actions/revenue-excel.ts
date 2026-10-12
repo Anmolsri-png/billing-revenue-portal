@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -306,6 +307,8 @@ export async function commitRevenueImport(
     );
 
     const { saved, skippedRows } = importedCount;
+
+    revalidatePath("/admin/revenue");
 
     return {
       success: true,
