@@ -23,14 +23,18 @@ type BillingCycleView = {
   paymentDueDate?: Date | string | null;
   invoiceNumber?: string | null;
   paymentReceived?: string | null;
+  payments?: Array<{
+    receivedDate?: Date | string | null;
+    amount?: number | null;
+  }> | null;
 };
 
 const rupee = "\u20B9";
 
 const formatCurrency = (value?: number | null) =>
   new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
   }).format(Number(value ?? 0));
 
 const surfaceClassName =
@@ -302,7 +306,16 @@ export default async function PurchaseOrderViewPage({ params }: Props) {
                           {formatStoredDate(bc.invoiceDate)}
                         </td>
                         <td className="p-3 text-zinc-700">
-                          {formatStoredDate(bc.paymentReceivedDate)}
+                          {bc.payments && bc.payments.length > 0
+                            ? bc.payments.map((payment) => (
+                                <span key={`${payment.receivedDate}-${payment.amount}`} className="block">
+                                  {formatStoredDate(payment.receivedDate)}
+                                  {typeof payment.amount === "number"
+                                    ? ` · ${rupee}${formatCurrency(payment.amount)}`
+                                    : ""}
+                                </span>
+                              ))
+                            : formatStoredDate(bc.paymentReceivedDate)}
                         </td>
                         <td className="p-3 text-zinc-700">
                           {formatStoredDate(bc.paymentDueDate)}

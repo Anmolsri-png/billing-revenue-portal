@@ -39,7 +39,7 @@ export default function UpcomingPayments() {
               </p>
             </div>
             <div className="font-semibold">
-              ₹{p.invoiceAmount?.toFixed(0)}
+              ₹{Number(p.invoiceAmount || 0).toFixed(2)}
             </div>
           </div>
         ))

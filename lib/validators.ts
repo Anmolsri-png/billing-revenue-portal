@@ -96,6 +96,20 @@ export const billingCycleSchema = z.object({
 
   paymentReceivedDate: z.union([z.date(), z.string()]).nullable().optional(),
 
+  payments: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        receivedDate: z.union([z.date(), z.string()]).nullable().optional(),
+        amount: z.preprocess(
+          (value) => (value === "" || value === undefined || value === null ? 0 : Number(value)),
+          z.number().optional(),
+        ),
+      }),
+    )
+    .optional()
+    .default([]),
+
   paymentDueDate: z.union([z.date(), z.string()]).nullable().optional(),
 
   billingRemark: z.string().optional(),

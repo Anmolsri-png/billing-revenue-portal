@@ -51,7 +51,8 @@ const safeNumber = (value: unknown) => {
 
 const formatCurrency = (value: unknown) =>
   new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(safeNumber(value));
 
 const surfaceClassName =
@@ -139,7 +140,7 @@ export default async function PLViewPage({ params }: Props) {
   const totalGM =
     totalBilledValue === 0
       ? 0
-      : Math.round(((totalBilledValue - totalCostValue) / totalBilledValue) * 100);
+      : Math.round(((totalBilledValue - totalCostValue) / totalBilledValue) * 10000) / 100;
 
   const summaryCards = [
     {
@@ -165,7 +166,7 @@ export default async function PLViewPage({ params }: Props) {
     },
     {
       label: "Total GM",
-      value: `${totalGM}%`,
+      value: `${totalGM.toFixed(2)}%`,
       icon: TrendingUp,
       accent: "border-amber-200 bg-amber-50 text-amber-700",
       bar: "bg-amber-500",

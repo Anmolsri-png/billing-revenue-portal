@@ -56,7 +56,10 @@ function getRevenueTotals(
 }
 
 function formatCurrency(value: number) {
-  return `₹ ${Math.round(value || 0).toLocaleString("en-IN")}`;
+  return `₹ ${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export const getUsersColumns = ({
@@ -203,7 +206,7 @@ export const getUsersColumns = ({
         const pending = Math.max(totals.billed - totals.collected, 0);
         const ratio =
           totals.billed > 0
-            ? Math.round((totals.collected / totals.billed) * 100)
+            ? Math.round((totals.collected / totals.billed) * 10000) / 100
             : 0;
 
         return [
@@ -226,15 +229,13 @@ export const getUsersColumns = ({
         );
         const ratio =
           totals.billed > 0
-            ? Math.round(
-                (totals.collected / totals.billed) * 100,
-              )
+            ? Math.round((totals.collected / totals.billed) * 10000) / 100
             : 0;
 
         return (
           <div className="min-w-[160px] space-y-2">
             <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>{ratio}% realized</span>
+              <span>{ratio.toFixed(2)}% realized</span>
               <span>{formatCurrency(pending)} pending</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">

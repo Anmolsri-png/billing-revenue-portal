@@ -1,10 +1,13 @@
+import { Suspense } from "react";
+
 import { getProjects } from "@/lib/actions/project";
 import { getCompanys } from "@/lib/actions/company";
 import { getCustomers } from "@/lib/actions/customer";
 import { canonicalCustomerName } from "@/lib/customer-names";
 import { canonicalCompanyName } from "@/lib/company-names";
 import { PLDashboardComponent } from "@/components/pl/pl-dashboard-component";
-import PurchaseOrderDashboard from "@/components/purchase-order/purchase-order-dashboard";
+import { RevenueDashboard } from "@/components/revenue-dashboard/revenue-dashboard";
+import { getFiscalYear } from "@/lib/fiscal-year";
 
 export const dynamic = "force-dynamic";
 
@@ -43,15 +46,18 @@ export default async function DashboardPage({
 
   if (currentTab === "revenue") {
     return (
-      <PurchaseOrderDashboard
-        companies={companies
-          .map((company) => ({
-            id: company.id,
-            name: canonicalCompanyName(company.name),
-          }))
-          .sort((left, right) => left.name.localeCompare(right.name))}
-        customers={JSON.parse(JSON.stringify(customerOptions))}
-      />
+      <Suspense fallback={<div className="h-40 animate-pulse rounded-2xl bg-slate-100" />}>
+        <RevenueDashboard
+          defaultYear={getFiscalYear(new Date())}
+          companies={companies
+            .map((company) => ({
+              id: company.id,
+              name: canonicalCompanyName(company.name),
+            }))
+            .sort((left, right) => left.name.localeCompare(right.name))}
+          customers={JSON.parse(JSON.stringify(customerOptions))}
+        />
+      </Suspense>
     );
   }
 

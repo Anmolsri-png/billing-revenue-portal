@@ -208,6 +208,37 @@ const getDefaultPaymentDueDate = (
   );
 };
 
+const paymentDrafts = (cycle?: {
+  collectedAmount?: number | null;
+  paymentReceivedDate?: Date | string | null;
+  payments?: Array<{
+    id?: string;
+    receivedDate?: Date | string | null;
+    amount?: number | null;
+  }> | null;
+} | null) => {
+  const stored = cycle?.payments ?? [];
+
+  if (stored.length > 0) {
+    return stored.map((payment) => ({
+      id: payment.id,
+      receivedDate: payment.receivedDate ? new Date(payment.receivedDate) : null,
+      amount: Number(payment.amount ?? 0),
+    }));
+  }
+
+  if (cycle?.paymentReceivedDate) {
+    return [
+      {
+        receivedDate: new Date(cycle.paymentReceivedDate),
+        amount: Number(cycle.collectedAmount ?? 0),
+      },
+    ];
+  }
+
+  return [];
+};
+
 const getBillingSubmittedDate = (
   cycle?: Partial<PurchaseOrderBillingCycle> | null,
   anchorDate?: Date | null,
@@ -245,6 +276,7 @@ const createBillingCycleDraft = ({
   billingSubmittedDate: getBillingSubmittedDate(existingCycle, anchorDate),
   paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
   paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
+  payments: paymentDrafts(existingCycle),
   paymentDueDate:
     getDefaultPaymentDueDate(existingCycle) ?? anchorDate ?? null,
   billingRemark: existingCycle?.billingRemark ?? "",
@@ -656,6 +688,7 @@ const POForm = ({
           cycleDates.billingSubmittedDate,
         paymentReceived: existingCycle?.paymentReceived ?? PaymentReceived.NO,
         paymentReceivedDate: existingCycle?.paymentReceivedDate ?? null,
+        payments: paymentDrafts(existingCycle),
         paymentDueDate:
           getDefaultPaymentDueDate(existingCycle) ??
           cycleDates.invoiceDate ??
@@ -708,6 +741,7 @@ const POForm = ({
         paymentReceivedDate: bc.paymentReceivedDate
           ? new Date(bc.paymentReceivedDate)
           : undefined,
+        payments: paymentDrafts(bc),
         paymentDueDate: getDefaultPaymentDueDate({
           billingSubmittedDate: bc.billingSubmittedDate
             ? new Date(bc.billingSubmittedDate)

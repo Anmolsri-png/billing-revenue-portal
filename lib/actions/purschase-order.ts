@@ -41,6 +41,96 @@ const resolvePaymentDueDate = (billingCycle?: {
   );
 };
 
+const receiptCreates = (billingCycle?: {
+  collectedAmount?: number | null;
+  paymentReceivedDate?: string | Date | null;
+  payments?: Array<{
+    receivedDate?: string | Date | null;
+    amount?: number | null;
+  }> | null;
+}) => {
+  const entered = (billingCycle?.payments ?? []).flatMap((payment) => {
+    const receivedDate = toLocalDate(payment.receivedDate);
+    const amount = Number(payment.amount || 0);
+    if (!receivedDate || !Number.isFinite(amount) || amount === 0) return [];
+    return [{ receivedDate, amount }];
+  });
+
+  if (entered.length > 0) return entered;
+
+  const receivedDate = toLocalDate(billingCycle?.paymentReceivedDate);
+  const amount = Number(billingCycle?.collectedAmount || 0);
+  if (!receivedDate || !Number.isFinite(amount) || amount === 0) return [];
+
+  return [{ receivedDate, amount }];
+};
+
+const billingCycleCreateData = (billingCycle: {
+  invoiceNumber?: string | null;
+  invoiceAmount?: number | null;
+  collectedAmount?: number | null;
+  invoiceDate?: string | Date | null;
+  billingSubmittedDate?: string | Date | null;
+  paymentReceivedDate?: string | Date | null;
+  paymentDueDate?: string | Date | null;
+  paymentReceived?: PaymentReceived | null;
+  billingRemark?: string | null;
+  tds?: number | null;
+  payments?: Array<{
+    receivedDate?: string | Date | null;
+    amount?: number | null;
+  }> | null;
+}) => {
+  const payments = receiptCreates(billingCycle);
+  const collectedAmount = payments.length
+    ? payments.reduce((total, payment) => total + payment.amount, 0)
+    : billingCycle.collectedAmount ?? 0;
+  const latestReceipt = [...payments].sort(
+    (left, right) => left.receivedDate.getTime() - right.receivedDate.getTime(),
+  ).at(-1);
+
+  return {
+    cycle: {
+      invoiceNumber: billingCycle.invoiceNumber ?? "",
+      invoiceAmount: billingCycle.invoiceAmount ?? 0,
+      collectedAmount,
+      invoiceDate: toLocalDate(billingCycle.invoiceDate),
+      billingSubmittedDate: resolveBillingSubmittedDate(billingCycle),
+      paymentReceivedDate: latestReceipt?.receivedDate ?? toLocalDate(billingCycle.paymentReceivedDate),
+      paymentDueDate: resolvePaymentDueDate(billingCycle),
+      paymentReceived: billingCycle.paymentReceived,
+      billingRemark: billingCycle.billingRemark ?? "",
+      tds: new Prisma.Decimal(billingCycle.tds ?? 0),
+    },
+    payments,
+  };
+};
+
+const createBillingCycles = async (
+  db: Prisma.TransactionClient,
+  purchaseOrderId: string,
+  cycles: Array<ReturnType<typeof billingCycleCreateData>>,
+) => {
+  for (const item of cycles) {
+    const data: Prisma.BillingCycleCreateInput = {
+      invoiceNumber: item.cycle.invoiceNumber,
+      invoiceAmount: item.cycle.invoiceAmount,
+      collectedAmount: item.cycle.collectedAmount,
+      invoiceDate: item.cycle.invoiceDate,
+      billingSubmittedDate: item.cycle.billingSubmittedDate,
+      paymentReceivedDate: item.cycle.paymentReceivedDate,
+      paymentDueDate: item.cycle.paymentDueDate,
+      paymentReceived: item.cycle.paymentReceived ?? undefined,
+      billingRemark: item.cycle.billingRemark,
+      tds: item.cycle.tds,
+      purchaseOrder: { connect: { id: purchaseOrderId } },
+      payments: item.payments.length ? { create: item.payments } : undefined,
+    };
+
+    await db.billingCycle.create({ data });
+  }
+};
+
 // ================= GET ALL =================
 export async function getPurchaseOrders() {
   try {
@@ -52,7 +142,13 @@ export async function getPurchaseOrders() {
         contractDuration: true,
         contract: true,
         customer: true,
-        billingCycles: true,
+        billingCycles: {
+          include: {
+            payments: {
+              orderBy: { receivedDate: "asc" },
+            },
+          },
+        },
         company: true,
         vendor: true,
       },
@@ -96,32 +192,18 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
       generatedCycles.length > 0
         ? Math.round(((validated.poAmount ?? 0) / generatedCycles.length) * 100) / 100
         : 0;
-    const billingCycles =
-      generatedCycles.length > 0
-        ? generatedCycles.map((cycle) => ({
-          invoiceNumber: "",
-          invoiceAmount: generatedInvoiceAmount,
-          collectedAmount: 0,
-          invoiceDate: cycle.invoiceDate,
-          billingSubmittedDate: resolveBillingSubmittedDate(cycle),
-          paymentReceivedDate: null,
-          paymentDueDate: resolvePaymentDueDate(cycle),
-          paymentReceived: PaymentReceived.NO,
-          billingRemark: "",
-          tds: new Prisma.Decimal(0),
-        }))
-        : validated.billingCycles.map((bc) => ({
-          invoiceNumber: bc.invoiceNumber ?? "",
-          invoiceAmount: bc.invoiceAmount ?? 0,
-          collectedAmount: bc.collectedAmount ?? 0,
-          invoiceDate: toLocalDate(bc.invoiceDate),
-          billingSubmittedDate: resolveBillingSubmittedDate(bc),
-          paymentReceivedDate: toLocalDate(bc.paymentReceivedDate),
-          paymentDueDate: resolvePaymentDueDate(bc),
-          paymentReceived: bc.paymentReceived,
-          billingRemark: bc.billingRemark ?? "",
-          tds: new Prisma.Decimal(bc.tds ?? 0),
-        }));
+    const generatedBillingCycles = generatedCycles.map((cycle) => ({
+      invoiceNumber: "",
+      invoiceAmount: generatedInvoiceAmount,
+      collectedAmount: 0,
+      invoiceDate: cycle.invoiceDate,
+      billingSubmittedDate: resolveBillingSubmittedDate(cycle),
+      paymentReceivedDate: null,
+      paymentDueDate: resolvePaymentDueDate(cycle),
+      paymentReceived: PaymentReceived.NO,
+      billingRemark: "",
+      tds: new Prisma.Decimal(0),
+    }));
 
     const purchaseOrderData: Prisma.PurchaseOrderUncheckedCreateInput = {
       customerPONumber: emptyToUndefined(validated.customerPONumber) ?? null,
@@ -143,14 +225,25 @@ export async function createPurchaseOrder(data: PurchaseOrder) {
       ageingDays: validated.ageingDays?.toString() ?? null,
       remark: validated.remark ?? null,
       scope: emptyToUndefined(validated.scope) ?? null,
-      billingCycles: {
-        create: billingCycles,
-      },
+      ...(generatedBillingCycles.length > 0
+        ? { billingCycles: { create: generatedBillingCycles } }
+        : {}),
     };
 
-    await prisma.purchaseOrder.create({
+    const created = await prisma.purchaseOrder.create({
       data: purchaseOrderData,
+      select: { id: true },
     });
+
+    if (generatedCycles.length === 0) {
+      await prisma.$transaction((tx) =>
+        createBillingCycles(
+          tx,
+          created.id,
+          validated.billingCycles.map((bc) => billingCycleCreateData(bc)),
+        ),
+      );
+    }
 
     return { success: true, message: "Purchase Order created successfully" };
   } catch (error) {
@@ -169,7 +262,13 @@ export async function getPurchaseOrderById(id: string) {
         contractDuration: true,
         contract: true,
         customer: true,
-        billingCycles: true,
+        billingCycles: {
+          include: {
+            payments: {
+              orderBy: { receivedDate: "asc" },
+            },
+          },
+        },
         company: true,
         vendor: true,
       },
@@ -212,27 +311,21 @@ export async function updatePurchaseOrder(
       ageingDays: validated.ageingDays?.toString() ?? null,
       remark: validated.remark ?? null,
       scope: emptyToUndefined(validated.scope) ?? null,
-      billingCycles: {
-        deleteMany: {},
-        create:
-          validated.billingCycles?.map((bc) => ({
-            invoiceNumber: bc.invoiceNumber ?? "",
-            invoiceAmount: bc.invoiceAmount ?? 0,
-            collectedAmount: bc.collectedAmount ?? 0,
-            invoiceDate: toLocalDate(bc.invoiceDate),
-            billingSubmittedDate: resolveBillingSubmittedDate(bc),
-            paymentReceivedDate: toLocalDate(bc.paymentReceivedDate),
-            paymentDueDate: resolvePaymentDueDate(bc),
-            paymentReceived: bc.paymentReceived,
-            billingRemark: bc.billingRemark ?? "",
-            tds: new Prisma.Decimal(bc.tds ?? 0),
-          })) ?? [],
-      },
     };
 
-    await prisma.purchaseOrder.update({
-      where: { id },
-      data: purchaseOrderData,
+    await prisma.$transaction(async (tx) => {
+      await tx.purchaseOrder.update({
+        where: { id },
+        data: purchaseOrderData,
+      });
+      await tx.billingCycle.deleteMany({
+        where: { purchaseOrderId: id },
+      });
+      await createBillingCycles(
+        tx,
+        id,
+        validated.billingCycles?.map((bc) => billingCycleCreateData(bc)) ?? [],
+      );
     });
 
     return { success: true, message: "Purchase Order updated successfully" };

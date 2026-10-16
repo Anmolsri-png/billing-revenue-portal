@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Plus, Trash2 } from "lucide-react";
 import { PaymentReceived } from "@prisma/client";
-import { FieldPathValue, UseFormReturn } from "react-hook-form";
+import { FieldPathValue, UseFormReturn, useFieldArray, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { cn } from "@/lib/utils";
@@ -98,6 +99,43 @@ const BillingCycleForm = ({
   const invoiceAmount = Number(
     form.watch(`billingCycles.${index}.invoiceAmount`) || 0,
   );
+  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+    control: form.control,
+    name: `billingCycles.${index}.payments`,
+  });
+  const payments = useWatch({
+    control: form.control,
+    name: `billingCycles.${index}.payments`,
+  }) ?? [];
+  const paymentSignature = payments
+    .map((payment) => `${payment?.receivedDate ?? ""}:${payment?.amount ?? ""}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!payments.length) return;
+
+    const total = payments.reduce((sum, payment) => sum + Number(payment?.amount || 0), 0);
+    const currentTotal = Number(form.getValues(`billingCycles.${index}.collectedAmount`) || 0);
+    if (currentTotal !== total) {
+      form.setValue(`billingCycles.${index}.collectedAmount`, total, { shouldDirty: true });
+    }
+
+    const latest = payments
+      .map((payment) => (payment?.receivedDate ? new Date(payment.receivedDate) : null))
+      .filter((date): date is Date => date instanceof Date && !Number.isNaN(date.getTime()))
+      .sort((left, right) => left.getTime() - right.getTime())
+      .at(-1) ?? null;
+    const currentDate = form.getValues(`billingCycles.${index}.paymentReceivedDate`);
+    const currentTime = currentDate ? new Date(currentDate).getTime() : null;
+    if (currentTime !== (latest?.getTime() ?? null)) {
+      form.setValue(`billingCycles.${index}.paymentReceivedDate`, latest, { shouldDirty: true });
+    }
+
+    if (total > 0 && form.getValues(`billingCycles.${index}.paymentReceived`) !== PaymentReceived.YES) {
+      form.setValue(`billingCycles.${index}.paymentReceived`, PaymentReceived.YES, { shouldDirty: true });
+    }
+  }, [form, index, paymentSignature, payments]);
+
   const collectedAmount = Number(
     form.watch(`billingCycles.${index}.collectedAmount`) || 0,
   );
@@ -309,6 +347,7 @@ const BillingCycleForm = ({
                   className={themedInputClassName}
                   type="number"
                   placeholder="Enter Collected Amount"
+                  readOnly={paymentFields.length > 0}
                   {...field}
                   onChange={(event) =>
                     field.onChange(Number(event.target.value))
@@ -460,44 +499,106 @@ const BillingCycleForm = ({
           )}
         />
 
-        <FormField
-          control={form.control}
-          name={`billingCycles.${index}.paymentReceivedDate`}
-          render={({ field }) => (
-            <FormItem className={themedFieldClassName}>
-              <FormLabel className={themedLabelClassName}>
-                Payment Received Date
-              </FormLabel>
-              <FormControl>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={dateButtonClassName(!!field.value)}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    avoidCollisions={false}
-                    className="w-auto p-0"
-                    side="bottom"
-                    sideOffset={8}
+        <div className="space-y-3 md:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={themedLabelClassName}>Payment received dates</p>
+              <p className="text-xs text-slate-500">
+                Add each receipt. The dashboard counts that amount in the month of its received date.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => appendPayment({ receivedDate: null, amount: 0 })}
+            >
+              <Plus />
+              Add date
+            </Button>
+          </div>
+          {paymentFields.length === 0 ? (
+            <p className="text-sm text-slate-500">No receipt dates yet.</p>
+          ) : (
+            paymentFields.map((paymentField, paymentIndex) => (
+              <div key={paymentField.id} className="grid grid-cols-1 items-start gap-5 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name={`billingCycles.${index}.payments.${paymentIndex}.receivedDate`}
+                  render={({ field }) => (
+                    <FormItem className={themedFieldClassName}>
+                      <FormLabel className={themedLabelClassName}>Received date</FormLabel>
+                      <FormControl>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={dateButtonClassName(!!field.value)}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            avoidCollisions={false}
+                            className="w-auto p-0"
+                            side="bottom"
+                            sideOffset={8}
+                          >
+                            <Calendar
+                              mode="single"
+                              selected={field.value ? new Date(field.value) : undefined}
+                              onSelect={field.onChange}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex items-start gap-3">
+                  <FormField
+                    control={form.control}
+                    name={`billingCycles.${index}.payments.${paymentIndex}.amount`}
+                    render={({ field }) => (
+                      <FormItem className={cn(themedFieldClassName, "min-w-0 flex-1")}>
+                        <FormLabel className={themedLabelClassName}>Amount</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={themedInputClassName}
+                            type="number"
+                            min={0}
+                            placeholder="Amount"
+                            value={field.value ?? ""}
+                            onChange={(event) => field.onChange(event.target.value === "" ? 0 : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="mt-8 shrink-0 border-rose-200 text-rose-600 hover:bg-rose-50"
+                    aria-label="Remove payment received date"
+                    onClick={() => {
+                      removePayment(paymentIndex);
+                      if (paymentFields.length === 1) {
+                        form.setValue(`billingCycles.${index}.paymentReceivedDate`, null);
+                      }
+                    }}
                   >
-                    <Calendar
-                      mode="single"
-                      selected={field.value as Date}
-                      onSelect={field.onChange}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+                    <Trash2 />
+                  </Button>
+                </div>
+              </div>
+            ))
           )}
-        />
+        </div>
 
         <FormField
           control={form.control}

@@ -30,6 +30,10 @@ const EditPOPage = async ({ params }: EditPOPageProps) => {
 
   const po = await getPurchaseOrderById(id);
 
+  if (!po.success || !po.data) {
+    redirect("/admin/revenue");
+  }
+
   const route = "/admin/revenue";
   const canEdit = await canAccess(route, "edit")
   if (!canEdit) {

@@ -334,13 +334,25 @@ export async function persistRevenueImport(
       tds: new Prisma.Decimal(row.tds),
     };
 
-    if (row.billingCycleId) {
-      await db.billingCycle.update({
-        where: { id: row.billingCycleId },
-        data: cycleData,
+    const saved = row.billingCycleId
+      ? await db.billingCycle.update({
+          where: { id: row.billingCycleId },
+          data: cycleData,
+        })
+      : await db.billingCycle.create({ data: cycleData });
+
+    await db.billingCyclePayment.deleteMany({
+      where: { billingCycleId: saved.id },
+    });
+
+    if (paymentReceivedDate && Number(row.collectedAmount) !== 0) {
+      await db.billingCyclePayment.create({
+        data: {
+          billingCycleId: saved.id,
+          receivedDate: paymentReceivedDate,
+          amount: Number(row.collectedAmount),
+        },
       });
-    } else {
-      await db.billingCycle.create({ data: cycleData });
     }
   }
 

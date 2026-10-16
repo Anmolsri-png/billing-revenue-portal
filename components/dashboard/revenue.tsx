@@ -30,7 +30,12 @@ export default function RevenueByCompany() {
   }, []);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
 
   if (loading) {
     return <div className="p-4 text-gray-500">Loading revenue data...</div>;

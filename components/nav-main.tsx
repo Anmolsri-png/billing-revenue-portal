@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type * as React from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { ChevronDown } from "lucide-react"
 
 import {
@@ -30,6 +30,14 @@ type NavItem = {
   }[]
 }
 
+function isNavActive(url: string | undefined, pathname: string, search: string) {
+  if (!url) return false
+  const [path, query] = url.split("?")
+  if (pathname !== path) return false
+  if (!query) return !search.includes("tab=")
+  return query.split("&").every((part) => search.split("&").includes(part))
+}
+
 const primaryButtonClass =
   "h-11 rounded-xl text-slate-200/95 hover:bg-white/7 hover:text-white active:bg-white/12 active:text-white group-data-[collapsible=icon]:rounded-full"
 
@@ -48,6 +56,7 @@ export function NavMain({
   items: NavItem[]
 }) {
   const pathname = usePathname()
+  const search = useSearchParams().toString()
 
   return (
     <SidebarGroup>
@@ -120,8 +129,8 @@ export function NavMain({
                 <SidebarMenuButton
                   asChild
                   tooltip={item.title}
-                  className={
-                    pathname === item.url
+                    className={
+                    isNavActive(item.url, pathname, search)
                       ? primaryActiveButtonClass
                       : primaryButtonClass
                   }

@@ -83,6 +83,7 @@ export const purchaseOrderDefaultValues = {
       billingSubmittedDate: null as Date | null,
       paymentReceived: PaymentReceived.NO,
       paymentReceivedDate: null as Date | null,
+      payments: [] as Array<{ receivedDate: Date | null; amount: number }>,
       paymentDueDate: null as Date | null,
       billingRemark: "",
       tds: 0,

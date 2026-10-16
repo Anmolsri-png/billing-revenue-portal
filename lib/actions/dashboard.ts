@@ -3,6 +3,19 @@
 import { format } from "date-fns";
 import { PaymentReceived, Prisma } from "@prisma/client";
 
+import { formatFilterDate, parseFilterDate, previousPeriod } from "@/lib/dashboard-presets";
+import {
+  calendarDaysBetween,
+  formatKolkataDate,
+  kolkataCalendar,
+  parseKolkataDate,
+} from "@/lib/fiscal-year";
+import {
+  agingBucketForDaysPastDue,
+  emptyAging,
+  type AgingSummary,
+  type DashboardFilters,
+} from "@/lib/revenue-metrics";
 import { prisma } from "@/lib/prisma";
 
 export interface DashboardStats {
@@ -21,16 +34,54 @@ export interface RevenueDashboardSummary {
   dueForBillingTillNow: number;
   collectedAmountTillNow: number;
   pendingCollectionTillNow: number;
+  overdueAmountTillNow: number;
+  partialInvoiceCount: number;
   collectionEfficiency: number;
+  aging: AgingSummary;
 }
+
+export type RevenuePeriodComparison = {
+  label: string;
+  summary: RevenueDashboardSummary;
+};
 
 interface BillingStatusFilters {
   company?: string;
   customer?: string;
-  startDate?: Date;
-  endDate?: Date;
+  startDate?: Date | string;
+  endDate?: Date | string;
   month?: string;
   quarter?: string;
+  timeZone?: "Asia/Kolkata";
+}
+
+export type RevenueDashboardQuery = {
+  company?: string;
+  customer?: string;
+  startDate?: string;
+  endDate?: string;
+  month?: string;
+  quarter?: string;
+  year?: string;
+  monthlyYear: number;
+};
+
+export type BillingInvoiceLine = {
+  month: string;
+  customerName: string;
+  companyName: string;
+  invoiceNumber: string;
+  poNumber: string;
+  scope: string;
+  serviceType: string;
+  billed: number;
+  collected: number;
+  outstanding: number;
+  status: string;
+};
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 type GroupedRevenueDetail = {
@@ -48,6 +99,8 @@ type GroupedRevenueDetail = {
   contractDuration: string;
   period: string;
   status: string;
+  pastDueAmount: number;
+  undatedOutstanding: number;
 };
 
 type RevenueSeries = "billing" | "payment";
@@ -186,11 +239,36 @@ function formatFinancialYearLabel(year: number) {
   return `FY ${year}-${String(year + 1).slice(-2)}`;
 }
 
+function fiscalMonthInZone(date: Date, filters?: BillingStatusFilters) {
+  if (filters?.timeZone === "Asia/Kolkata") {
+    return (kolkataCalendar(date).month - 1 + 9) % 12;
+  }
+
+  return getFinancialMonth(date);
+}
+
 function getSummaryAsOfDate(
   year?: number,
   filters?: BillingStatusFilters,
   referenceDate = new Date(),
 ) {
+  if (filters?.timeZone === "Asia/Kolkata") {
+    const { year: calendarYear, month } = kolkataCalendar(referenceDate);
+    const lastDay = new Date(Date.UTC(calendarYear, month, 0)).getUTCDate();
+    let asOfYmd = `${calendarYear}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    if (typeof year === "number") {
+      const fyEnd = `${year + 1}-03-31`;
+      if (fyEnd < asOfYmd) asOfYmd = fyEnd;
+    }
+
+    if (typeof filters.endDate === "string" && filters.endDate < asOfYmd) {
+      asOfYmd = filters.endDate;
+    }
+
+    return parseKolkataDate(asOfYmd, true);
+  }
+
   const currentMonthEnd = new Date(
     referenceDate.getFullYear(),
     referenceDate.getMonth() + 1,
@@ -202,11 +280,8 @@ function getSummaryAsOfDate(
     asOfDate = getEarlierDate(asOfDate, getFinancialYearRange(year).end);
   }
 
-  if (filters?.endDate) {
-    asOfDate = getEarlierDate(
-      asOfDate,
-      normalizeEndOfDate(new Date(filters.endDate)),
-    );
+  if (filters?.endDate instanceof Date) {
+    asOfDate = getEarlierDate(asOfDate, normalizeEndOfDate(filters.endDate));
   }
 
   return asOfDate;
@@ -308,12 +383,31 @@ function getPaymentChartDate(
   );
 }
 
+function splitOutstanding(pending: number, dueDate?: Date | null) {
+  if (pending <= 0) return { pastDue: 0, undated: 0 };
+  if (!dueDate) return { pastDue: 0, undated: pending };
+  return calendarDaysBetween(new Date(), dueDate) >= 1
+    ? { pastDue: pending, undated: 0 }
+    : { pastDue: 0, undated: 0 };
+}
+
+type StoredPayment = {
+  receivedDate?: Date | null;
+  amount?: number | null;
+};
+
 function getEffectiveCollectedAmount(
   cycle: Pick<
     BillingCycleWithPurchaseOrder,
     "paymentReceived" | "collectedAmount" | "invoiceAmount"
-  >,
+  > & { payments?: StoredPayment[] | null },
 ) {
+  const payments = cycle.payments ?? [];
+
+  if (payments.length > 0) {
+    return payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  }
+
   const collected = Number(cycle.collectedAmount || 0);
 
   if (cycle.paymentReceived === PaymentReceived.YES && collected <= 0) {
@@ -321,6 +415,42 @@ function getEffectiveCollectedAmount(
   }
 
   return collected;
+}
+
+function paymentReceipts(
+  cycle: Pick<
+    BillingCycleWithPurchaseOrder,
+    | "paymentReceived"
+    | "paymentReceivedDate"
+    | "invoiceDate"
+    | "billingSubmittedDate"
+    | "collectedAmount"
+    | "invoiceAmount"
+  > & { payments?: StoredPayment[] | null },
+) {
+  const stored = (cycle.payments ?? []).flatMap((payment) => {
+    if (!payment.receivedDate) return [];
+    const amount = Number(payment.amount || 0);
+    if (!Number.isFinite(amount) || amount === 0) return [];
+    return [{ receivedDate: payment.receivedDate, amount }];
+  });
+
+  if (stored.length > 0) return stored;
+
+  const amount = getEffectiveCollectedAmount(cycle);
+  const receivedDate = getPaymentChartDate(cycle) ?? getPaymentDate(cycle);
+  if (!receivedDate || amount === 0) return [];
+
+  return [{ receivedDate, amount }];
+}
+
+function collectedByReceiptDate(
+  cycle: Parameters<typeof paymentReceipts>[0],
+  asOfDate: Date,
+) {
+  return paymentReceipts(cycle)
+    .filter((receipt) => normalizeDate(receipt.receivedDate) <= asOfDate)
+    .reduce((total, receipt) => total + receipt.amount, 0);
 }
 
 function matchesCompanyFilter(
@@ -372,7 +502,7 @@ const FINANCIAL_QUARTER_MONTHS: number[][] = [
 ];
 
 function matchesFilterMonth(date: Date, filters?: BillingStatusFilters) {
-  const financialMonth = getFinancialMonth(date);
+  const financialMonth = fiscalMonthInZone(date, filters);
 
   if (filters?.month && filters.month !== "all") {
     if (financialMonth !== Number(filters.month)) {
@@ -392,16 +522,30 @@ function matchesFilterMonth(date: Date, filters?: BillingStatusFilters) {
 }
 
 function isWithinFilterDateRange(date: Date, filters?: BillingStatusFilters) {
-  if (filters?.startDate) {
-    const startDate = normalizeDate(new Date(filters.startDate));
+  if (filters?.timeZone === "Asia/Kolkata") {
+    const ymd = formatKolkataDate(date);
+
+    if (typeof filters.startDate === "string" && ymd < filters.startDate) {
+      return false;
+    }
+
+    if (typeof filters.endDate === "string" && ymd > filters.endDate) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (filters?.startDate instanceof Date) {
+    const startDate = normalizeDate(filters.startDate);
 
     if (date < startDate) {
       return false;
     }
   }
 
-  if (filters?.endDate) {
-    const endDate = normalizeEndOfDate(new Date(filters.endDate));
+  if (filters?.endDate instanceof Date) {
+    const endDate = normalizeEndOfDate(filters.endDate);
 
     if (date > endDate) {
       return false;
@@ -409,6 +553,17 @@ function isWithinFilterDateRange(date: Date, filters?: BillingStatusFilters) {
   }
 
   return true;
+}
+
+function inFinancialYear(date: Date, year: number, filters?: BillingStatusFilters) {
+  if (filters?.timeZone === "Asia/Kolkata") {
+    const ymd = formatKolkataDate(date);
+    return ymd >= `${year}-04-01` && ymd <= `${year + 1}-03-31`;
+  }
+
+  const normalized = normalizeDate(date);
+  const { start, end } = getFinancialYearRange(year);
+  return normalized >= start && normalized <= end;
 }
 
 function getCustomerDisplayName(customer?: CustomerRecord | null) {
@@ -502,9 +657,11 @@ export async function getMonthlyBillingData(
 
   const currentFY = getCurrentFinancialYear(currentDate);
 
-  const currentFYMonth = getFinancialMonth(currentDate);
+  const currentFYMonth = fiscalMonthInZone(currentDate, filters);
 
-  const today = normalizeDate(new Date());
+  const today = filters?.timeZone === "Asia/Kolkata"
+    ? parseKolkataDate(formatKolkataDate(new Date()), true)
+    : normalizeDate(new Date());
   const purchaseOrderFilter = getPurchaseOrderFilter(filters);
 
   const cycles = await prisma.billingCycle.findMany({
@@ -513,6 +670,9 @@ export async function getMonthlyBillingData(
         purchaseOrder: purchaseOrderFilter,
       }),
     },
+    include: {
+      payments: true,
+    },
   });
 
   const data = MONTHS.map((month, index) => ({
@@ -520,6 +680,7 @@ export async function getMonthlyBillingData(
     billing: 0,
     payment: 0,
     overdue: 0,
+    projected: 0,
     index,
   }));
 
@@ -531,19 +692,25 @@ export async function getMonthlyBillingData(
     const invoiceDate = getInvoiceDate(cycle);
 
     if (invoiceDate) {
-      const normalizedInvoiceDate = normalizeDate(invoiceDate);
+      const normalizedInvoiceDate = filters?.timeZone === "Asia/Kolkata"
+        ? invoiceDate
+        : normalizeDate(invoiceDate);
 
-      const fyMonth = getFinancialMonth(normalizedInvoiceDate);
+      const fyMonth = fiscalMonthInZone(normalizedInvoiceDate, filters);
 
       const isFutureMonth = year === currentFY && fyMonth > currentFYMonth;
-
-      if (
-        !isFutureMonth &&
-        normalizedInvoiceDate >= start &&
-        normalizedInvoiceDate <= end &&
+      const matchesPeriod =
+        (filters?.timeZone === "Asia/Kolkata"
+          ? inFinancialYear(invoiceDate, year, filters)
+          : normalizedInvoiceDate >= start && normalizedInvoiceDate <= end) &&
         isWithinFilterDateRange(normalizedInvoiceDate, filters) &&
-        matchesFilterMonth(normalizedInvoiceDate, filters)
-      ) {
+        matchesFilterMonth(normalizedInvoiceDate, filters);
+
+      if (matchesPeriod) {
+        data[fyMonth].projected += billed;
+      }
+
+      if (!isFutureMonth && matchesPeriod) {
         data[fyMonth].billing += billed;
 
         const pending = Math.max(billed - collected, 0);
@@ -557,24 +724,23 @@ export async function getMonthlyBillingData(
         }
       }
     }
-    if (hasPaymentChartRecord(cycle)) {
-      const paymentDate = getPaymentChartDate(cycle);
+    for (const receipt of paymentReceipts(cycle)) {
+      const paymentDate = receipt.receivedDate;
+      const normalizedPaymentDate = filters?.timeZone === "Asia/Kolkata"
+        ? paymentDate
+        : normalizeDate(paymentDate);
+      const fyMonth = fiscalMonthInZone(normalizedPaymentDate, filters);
+      const isFutureMonth = year === currentFY && fyMonth > currentFYMonth;
 
-      if (paymentDate && collected > 0) {
-        const normalizedPaymentDate = normalizeDate(paymentDate);
-
-        const fyMonth = getFinancialMonth(normalizedPaymentDate);
-        const isFutureMonth = year === currentFY && fyMonth > currentFYMonth;
-
-        if (
-          !isFutureMonth &&
-          normalizedPaymentDate >= start &&
-          normalizedPaymentDate <= end &&
-          isWithinFilterDateRange(normalizedPaymentDate, filters) &&
-          matchesFilterMonth(normalizedPaymentDate, filters)
-        ) {
-          data[fyMonth].payment += collected;
-        }
+      if (
+        !isFutureMonth &&
+        (filters?.timeZone === "Asia/Kolkata"
+          ? inFinancialYear(paymentDate, year, filters)
+          : normalizedPaymentDate >= start && normalizedPaymentDate <= end) &&
+        isWithinFilterDateRange(normalizedPaymentDate, filters) &&
+        matchesFilterMonth(normalizedPaymentDate, filters)
+      ) {
+        data[fyMonth].payment += receipt.amount;
       }
     }
   }
@@ -608,6 +774,12 @@ export async function getRevenueDashboardSummary(
       billingSubmittedDate: true,
       paymentReceived: true,
       paymentReceivedDate: true,
+      payments: {
+        select: {
+          receivedDate: true,
+          amount: true,
+        },
+      },
       paymentDueDate: true,
       collectedAmount: true,
       invoiceAmount: true,
@@ -623,23 +795,21 @@ export async function getRevenueDashboardSummary(
   let dueForBillingTillNow = 0;
   let collectedAmountTillNow = 0;
   let pendingCollectionTillNow = 0;
+  let overdueAmountTillNow = 0;
+  let partialInvoiceCount = 0;
+  const aging = emptyAging();
 
   for (const cycle of cycles) {
     const invoiceDate = getInvoiceDate(cycle);
 
     if (invoiceDate) {
-      const normalizedInvoiceDate = normalizeDate(invoiceDate);
+      const normalizedInvoiceDate = filters?.timeZone === "Asia/Kolkata"
+        ? invoiceDate
+        : normalizeDate(invoiceDate);
       let matchesFinancialYearSelection = true;
 
-      if (typeof year === "number") {
-        const fyRange = getFinancialYearRange(year);
-
-        if (
-          normalizedInvoiceDate < fyRange.start ||
-          normalizedInvoiceDate > fyRange.end
-        ) {
-          matchesFinancialYearSelection = false;
-        }
+      if (typeof year === "number" && !inFinancialYear(invoiceDate, year, filters)) {
+        matchesFinancialYearSelection = false;
       }
 
       if (matchesFinancialYearSelection) {
@@ -656,18 +826,36 @@ export async function getRevenueDashboardSummary(
         ) {
           totalRevenueTillNow += billedAmount;
 
-          const paymentDate = getPaymentDate(cycle);
-          const effectiveCollectedAmount = getEffectiveCollectedAmount(cycle);
-          const collectedTillNow =
-            paymentDate && normalizeDate(paymentDate) <= asOfDate
-              ? effectiveCollectedAmount
-              : 0;
+          const collectedTillNow = collectedByReceiptDate(cycle, asOfDate);
 
           collectedAmountTillNow += collectedTillNow;
-          pendingCollectionTillNow += Math.max(
-            billedAmount - collectedTillNow,
-            0,
-          );
+          const pending = Math.max(billedAmount - collectedTillNow, 0);
+          pendingCollectionTillNow += pending;
+
+          if (collectedTillNow > 0 && pending > 0) {
+            partialInvoiceCount += 1;
+          }
+
+          if (pending > 0) {
+            if (!cycle.paymentDueDate) {
+              aging.missingDueDateAmount += pending;
+              aging.missingDueDateCount += 1;
+            } else {
+              const daysPastDue = calendarDaysBetween(new Date(), cycle.paymentDueDate);
+              if (daysPastDue >= 1) {
+                overdueAmountTillNow += pending;
+                const bucketId = agingBucketForDaysPastDue(daysPastDue);
+                const bucket = aging.buckets.find((item) => item.id === bucketId);
+                if (bucket) {
+                  bucket.amount += pending;
+                  bucket.count += 1;
+                }
+              } else {
+                aging.notYetDueAmount += pending;
+                aging.notYetDueCount += 1;
+              }
+            }
+          }
         }
       }
     }
@@ -678,17 +866,12 @@ export async function getRevenueDashboardSummary(
       continue;
     }
 
-    const normalizedBillingDate = normalizeDate(dueForBillingDate);
+    const normalizedBillingDate = filters?.timeZone === "Asia/Kolkata"
+      ? dueForBillingDate
+      : normalizeDate(dueForBillingDate);
 
-    if (typeof year === "number") {
-      const fyRange = getFinancialYearRange(year);
-
-      if (
-        normalizedBillingDate < fyRange.start ||
-        normalizedBillingDate > fyRange.end
-      ) {
-        continue;
-      }
+    if (typeof year === "number" && !inFinancialYear(dueForBillingDate, year, filters)) {
+      continue;
     }
 
     if (!isWithinFilterDateRange(normalizedBillingDate, filters)) {
@@ -706,18 +889,24 @@ export async function getRevenueDashboardSummary(
     dueForBillingTillNow += Number(cycle.invoiceAmount || 0);
   }
 
+  aging.supported =
+    aging.notYetDueCount > 0 || aging.buckets.some((bucket) => bucket.count > 0);
+
   return {
     totalRevenueProjected,
     totalRevenueTillNow,
     dueForBillingTillNow,
     collectedAmountTillNow,
     pendingCollectionTillNow,
+    overdueAmountTillNow,
+    partialInvoiceCount,
     collectionEfficiency:
       totalRevenueTillNow > 0
         ? Number(
             ((collectedAmountTillNow / totalRevenueTillNow) * 100).toFixed(2),
           )
         : 0,
+    aging,
   };
 }
 
@@ -814,6 +1003,7 @@ export async function getBillingStatusDetails(
 ) {
   const cycles = await prisma.billingCycle.findMany({
     include: {
+      payments: true,
       purchaseOrder: {
         include: {
           ServiceType: true,
@@ -827,6 +1017,7 @@ export async function getBillingStatusDetails(
   });
 
   const groupedRecords = new Map<string, GroupedRevenueDetail>();
+  const lines: BillingInvoiceLine[] = [];
 
   for (const cycle of cycles) {
     const invoiceDate = getInvoiceDate(cycle);
@@ -835,14 +1026,12 @@ export async function getBillingStatusDetails(
       continue;
     }
 
-    const normalizedDate = normalizeDate(invoiceDate);
+    const normalizedDate = filters?.timeZone === "Asia/Kolkata"
+      ? invoiceDate
+      : normalizeDate(invoiceDate);
 
-    if (typeof year === "number") {
-      const fyRange = getFinancialYearRange(year);
-
-      if (normalizedDate < fyRange.start || normalizedDate > fyRange.end) {
-        continue;
-      }
+    if (typeof year === "number" && !inFinancialYear(invoiceDate, year, filters)) {
+      continue;
     }
 
     if (!matchesCompanyFilter(cycle, filters)) {
@@ -864,8 +1053,13 @@ export async function getBillingStatusDetails(
     const billed = Number(cycle.invoiceAmount || 0);
     const collected = getEffectiveCollectedAmount(cycle);
     const pendingAmount = Math.max(billed - collected, 0);
-    const financialYear = getFinancialYearForDate(normalizedDate);
-    const financialMonth = getFinancialMonth(normalizedDate);
+    const outstandingParts = splitOutstanding(pendingAmount, cycle.paymentDueDate);
+    const financialYear = filters?.timeZone === "Asia/Kolkata"
+      ? (kolkataCalendar(normalizedDate).month < 4
+        ? kolkataCalendar(normalizedDate).year - 1
+        : kolkataCalendar(normalizedDate).year)
+      : getFinancialYearForDate(normalizedDate);
+    const financialMonth = fiscalMonthInZone(normalizedDate, filters);
     const shouldSplitByMonth =
       (Boolean(filters?.month) && filters?.month !== "all") ||
       (Boolean(filters?.quarter) && filters?.quarter !== "all");
@@ -882,12 +1076,27 @@ export async function getBillingStatusDetails(
       configuredDurationMonths > 0
         ? `${configuredDurationMonths} months`
         : cycle.purchaseOrder?.contractDuration?.name || "-";
+    lines.push({
+      month: MONTHS[financialMonth],
+      customerName: getCustomerDisplayName(cycle.purchaseOrder?.customer),
+      companyName: cycle.purchaseOrder?.company?.name || "-",
+      invoiceNumber: cycle.invoiceNumber?.trim() || "-",
+      poNumber: cycle.purchaseOrder?.customerPONumber || "-",
+      scope: cycle.purchaseOrder?.scope?.trim() || "-",
+      serviceType: cycle.purchaseOrder?.ServiceType?.name || "-",
+      billed: roundMoney(billed),
+      collected: roundMoney(collected),
+      outstanding: roundMoney(pendingAmount),
+      status: cycle.purchaseOrder?.status || "-",
+    });
     const existing = groupedRecords.get(groupKey);
 
     if (existing) {
       existing.amount += billed;
       existing.collectedAmount += collected;
       existing.overdueAmount += pendingAmount;
+      existing.pastDueAmount += outstandingParts.pastDue;
+      existing.undatedOutstanding += outstandingParts.undated;
       continue;
     }
 
@@ -906,10 +1115,12 @@ export async function getBillingStatusDetails(
       contractDuration,
       period,
       status: cycle.purchaseOrder?.status || "-",
+      pastDueAmount: outstandingParts.pastDue,
+      undatedOutstanding: outstandingParts.undated,
     });
   }
 
-  return Array.from(groupedRecords.values()).sort((a, b) => {
+  const records = Array.from(groupedRecords.values()).sort((a, b) => {
     const periodCompare = b.period.localeCompare(a.period);
 
     if (periodCompare !== 0) {
@@ -924,6 +1135,16 @@ export async function getBillingStatusDetails(
 
     return a.poNumber.localeCompare(b.poNumber);
   });
+
+  lines.sort((left, right) => {
+    const monthOrder = MONTHS.indexOf(left.month) - MONTHS.indexOf(right.month);
+    if (monthOrder !== 0) return monthOrder;
+    const customerOrder = left.customerName.localeCompare(right.customerName);
+    if (customerOrder !== 0) return customerOrder;
+    return left.invoiceNumber.localeCompare(right.invoiceNumber);
+  });
+
+  return { records, lines };
 }
 
 export async function getRevenueDetailsByMonth(
@@ -940,6 +1161,7 @@ export async function getRevenueDetailsByMonth(
       }),
     },
     include: {
+      payments: true,
       purchaseOrder: {
         include: {
           company: true,
@@ -951,10 +1173,26 @@ export async function getRevenueDetailsByMonth(
 
   return cycles
     .filter((cycle) => {
-      const seriesDate =
-        params.series === "payment"
-          ? getPaymentChartDate(cycle)
-          : getInvoiceDate(cycle);
+      if (!matchesCompanyFilter(cycle, filters)) {
+        return false;
+      }
+
+      if (!matchesCustomerFilter(cycle, filters)) {
+        return false;
+      }
+
+      if (params.series === "payment") {
+        return paymentReceipts(cycle).some((receipt) => {
+          const normalizedDate = normalizeDate(receipt.receivedDate);
+          return (
+            normalizedDate >= start &&
+            normalizedDate <= end &&
+            isWithinFilterDateRange(normalizedDate, filters)
+          );
+        });
+      }
+
+      const seriesDate = getInvoiceDate(cycle);
 
       if (!seriesDate) {
         return false;
@@ -966,22 +1204,7 @@ export async function getRevenueDetailsByMonth(
         return false;
       }
 
-      if (!matchesCompanyFilter(cycle, filters)) {
-        return false;
-      }
-
-      if (!matchesCustomerFilter(cycle, filters)) {
-        return false;
-      }
-
       if (!isWithinFilterDateRange(normalizedDate, filters)) {
-        return false;
-      }
-
-      if (
-        params.series === "payment" &&
-        !hasPaymentChartRecord(cycle)
-      ) {
         return false;
       }
 
@@ -989,14 +1212,20 @@ export async function getRevenueDetailsByMonth(
     })
     .map((cycle) => {
       const billedAmount = Number(cycle.invoiceAmount || 0);
+      const receiptsInMonth = paymentReceipts(cycle).filter((receipt) => {
+        const normalizedDate = normalizeDate(receipt.receivedDate);
+        return normalizedDate >= start && normalizedDate <= end;
+      });
+      const paymentReceived =
+        params.series === "payment"
+          ? receiptsInMonth.reduce((total, receipt) => total + receipt.amount, 0)
+          : getEffectiveCollectedAmount(cycle);
 
-      const paymentReceived = getEffectiveCollectedAmount(cycle);
-
-      const pendingAmount = billedAmount - paymentReceived;
+      const pendingAmount = billedAmount - getEffectiveCollectedAmount(cycle);
 
       const seriesDate =
         params.series === "payment"
-          ? getPaymentChartDate(cycle)
+          ? receiptsInMonth[0]?.receivedDate
           : getInvoiceDate(cycle);
 
       return {
@@ -1023,4 +1252,66 @@ export async function getRevenueDetailsByMonth(
         pendingAmount: pendingAmount > 0 ? pendingAmount : 0,
       };
     });
+}
+
+export async function getRevenueDashboard(query: RevenueDashboardQuery) {
+  const filters: BillingStatusFilters = {
+    company: query.company,
+    customer: query.customer,
+    startDate: query.startDate,
+    endDate: query.endDate,
+    month: query.month,
+    quarter: query.quarter,
+    timeZone: "Asia/Kolkata",
+  };
+  const year = query.year && query.year !== "all" ? Number(query.year) : undefined;
+  const currentFilters: DashboardFilters = {
+    company: query.company || "all",
+    customer: query.customer || "all",
+    startDate: parseFilterDate(query.startDate ?? null),
+    endDate: parseFilterDate(query.endDate ?? null),
+    month: query.month || "all",
+    quarter: query.quarter || "all",
+    year: query.year || "all",
+  };
+  const earlier = previousPeriod(currentFilters);
+  const comparisonFilters: BillingStatusFilters | null = earlier
+    ? {
+        company: query.company,
+        customer: query.customer,
+        startDate: earlier.startDate ? formatFilterDate(earlier.startDate) : undefined,
+        endDate: earlier.endDate ? formatFilterDate(earlier.endDate) : undefined,
+        month: earlier.month,
+        quarter: earlier.quarter,
+        timeZone: "Asia/Kolkata",
+      }
+    : null;
+  const comparisonYear = earlier ? Number(earlier.year) : undefined;
+  const [summary, billingDetails, monthly, comparisonSummary] = await Promise.all([
+    getRevenueDashboardSummary(year, filters),
+    getBillingStatusDetails(year, filters),
+    getMonthlyBillingData(query.monthlyYear, filters),
+    comparisonFilters
+      ? getRevenueDashboardSummary(comparisonYear, comparisonFilters)
+      : Promise.resolve(null),
+  ]);
+
+  const comparison: RevenuePeriodComparison | null =
+    earlier && comparisonSummary
+      ? { label: earlier.label, summary: comparisonSummary }
+      : null;
+
+  return {
+    summary,
+    comparison,
+    records: billingDetails.records,
+    lines: billingDetails.lines,
+    monthly: monthly.map((point) => ({
+      month: point.month,
+      billing: point.billing,
+      payment: point.payment,
+      overdue: point.overdue,
+      projected: point.projected,
+    })),
+  };
 }

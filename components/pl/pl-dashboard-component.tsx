@@ -207,6 +207,7 @@ function getFilterSummary(filters: Filters) {
 
 function formatNumber(value: number | string | null | undefined) {
   return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value || 0));
 }

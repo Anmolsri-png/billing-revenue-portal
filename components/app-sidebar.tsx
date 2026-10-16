@@ -144,11 +144,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   };
 };
 
-function filterNav<T extends { url?: string; items?: { url: string }[] }>(
-  navMain: T[],
-  allowedRoutes: string[],
-  role?: string,
-): T[] {
+function filterNav<
+  T extends { url?: string; permissionUrl?: string; items?: { url: string }[] },
+>(navMain: T[], allowedRoutes: string[], role?: string): T[] {
   const isAdmin = role?.toLowerCase().includes("admin");
   const normalizedAllowedRoutes = allowedRoutes.filter(Boolean);
 
@@ -178,7 +176,7 @@ function filterNav<T extends { url?: string; items?: { url: string }[] }>(
         return item.items.length > 0;
       }
 
-      return normalizedAllowedRoutes.includes(item.url!);
+      return normalizedAllowedRoutes.includes(item.permissionUrl ?? item.url!);
     });
 }
 

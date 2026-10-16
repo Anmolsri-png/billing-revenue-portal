@@ -150,6 +150,19 @@ model BillingCycle {
   invoiceNumber        String
   tds                  Decimal         @default(0) @db.Decimal(12, 2)
   purchaseOrder        PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  payments             BillingCyclePayment[]
+}
+
+model BillingCyclePayment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  billingCycleId String       @db.Uuid
+  receivedDate   DateTime
+  amount         Float
+  createdAt      DateTime     @default(now())
+  billingCycle   BillingCycle @relation(fields: [billingCycleId], references: [id], onDelete: Cascade)
+
+  @@index([billingCycleId])
+  @@index([receivedDate])
 }
 
 model ServiceType {
